@@ -70,6 +70,19 @@ document.addEventListener('DOMContentLoaded', () => {
     // -------------------------------------------------------------
     // 3. Elements & State
     // -------------------------------------------------------------
+    // Tamagotchi Live Gauges Elements
+    const barHunger = document.getElementById('bar-hunger');
+    const barValHunger = document.getElementById('bar-val-hunger');
+    const barEnergy = document.getElementById('bar-energy');
+    const barValEnergy = document.getElementById('bar-val-energy');
+    const barHappiness = document.getElementById('bar-happiness');
+    const barValHappiness = document.getElementById('bar-val-happiness');
+    const barLove = document.getElementById('bar-love');
+    const barValLove = document.getElementById('bar-val-love');
+    const tamagotchiStatusBadge = document.getElementById('tamagotchi-status-badge');
+    const actionButtons = document.querySelectorAll('.btn-action');
+
+    // Manual Checkin Sliders
     const sliderHunger = document.getElementById('slider-hunger');
     const sliderEnergy = document.getElementById('slider-energy');
     const sliderStress = document.getElementById('slider-stress');
@@ -103,14 +116,127 @@ document.addEventListener('DOMContentLoaded', () => {
         const now = new Date();
         const startHour = String(now.getHours()).padStart(2, '0');
         const endHour = String((now.getHours() + 1) % 24).padStart(2, '0');
-        timeIntervalInput.value = `${startHour}:00 - ${endHour}:00`;
+        if (timeIntervalInput) {
+            timeIntervalInput.value = `${startHour}:00 - ${endHour}:00`;
+        }
     };
     updateDefaultTimeInterval();
 
     // -------------------------------------------------------------
-    // 5. Dynamic Thoughts (Speech Bubble) Generator
+    // 5. Tamagotchi State & Realtime Care Actions
     // -------------------------------------------------------------
-    const updateSpeechBubble = () => {
+    const renderTamagotchiState = (data) => {
+        if (!data) return;
+
+        if (barHunger && barValHunger) {
+            barHunger.style.width = `${data.hunger}%`;
+            barValHunger.innerText = `${data.hunger}%`;
+        }
+        if (barEnergy && barValEnergy) {
+            barEnergy.style.width = `${data.energy}%`;
+            barValEnergy.innerText = `${data.energy}%`;
+        }
+        if (barHappiness && barValHappiness) {
+            barHappiness.style.width = `${data.happiness}%`;
+            barValHappiness.innerText = `${data.happiness}%`;
+        }
+        if (barLove && barValLove) {
+            barLove.style.width = `${data.love}%`;
+            barValLove.innerText = `${data.love}%`;
+        }
+
+        if (tamagotchiStatusBadge && data.status_text) {
+            tamagotchiStatusBadge.innerText = data.status_text;
+        }
+
+        if (speechBubble && data.status_text) {
+            speechBubble.innerText = data.status_text;
+        }
+
+        if (viewer) {
+            if (data.mood) viewer.setMood(data.mood);
+            viewer.updateLighting(data.happiness, data.energy);
+        }
+    };
+
+    const fetchTamagotchiStatus = async () => {
+        try {
+            const resp = await fetch('/api/status');
+            if (!resp.ok) return;
+            const res = await resp.json();
+            if (res.status === 'success' && res.data) {
+                renderTamagotchiState(res.data);
+            }
+        } catch (e) {
+            console.error('Error fetching tamagotchi status:', e);
+        }
+    };
+
+    // Initial fetch and periodic poll every 12 seconds
+    fetchTamagotchiStatus();
+    setInterval(fetchTamagotchiStatus, 12000);
+
+    // Handle Care Actions (feed, hug, sleep, miss)
+    actionButtons.forEach(btn => {
+        btn.addEventListener('click', async () => {
+            const action = btn.getAttribute('data-action');
+            if (!action) return;
+
+            haptic('medium');
+
+            // 3D Scene animation reaction immediately on click
+            if (viewer) {
+                if (action === 'hug' || action === 'miss') {
+                    viewer.jumpAndSpin();
+                } else if (action === 'feed') {
+                    viewer.jumpAndSpin();
+                } else if (action === 'sleep') {
+                    viewer.setMood('tired');
+                }
+            }
+
+            btn.disabled = true;
+            btn.classList.add('opacity-70', 'scale-95');
+
+            try {
+                const resp = await fetch('/api/action', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action })
+                });
+                const res = await resp.json();
+
+                if (res.status === 'success') {
+                    haptic('success');
+                    playCuteChime();
+                    showNotificationToast(res.message, 'bg-rose-500 text-white');
+                    renderTamagotchiState(res.data);
+                } else if (res.status === 'cooldown') {
+                    haptic('warning');
+                    showNotificationToast(res.message, 'bg-amber-500 text-white');
+                    if (res.data) renderTamagotchiState(res.data);
+                } else {
+                    showNotificationToast('Что-то пошло не так 😿', 'bg-rose-500 text-white');
+                }
+            } catch (err) {
+                console.error('Action error:', err);
+                haptic('error');
+                showNotificationToast('Ошибка соединения с сервером', 'bg-rose-500 text-white');
+            } finally {
+                setTimeout(() => {
+                    btn.disabled = false;
+                    btn.classList.remove('opacity-70', 'scale-95');
+                }, 300);
+            }
+        });
+    });
+
+    // -------------------------------------------------------------
+    // 6. Dynamic Thoughts (Speech Bubble) Generator for Checkins
+    // -------------------------------------------------------------
+    const updateSpeechBubbleFromSliders = () => {
+        if (!sliderHunger || !sliderEnergy || !sliderStress || !sliderMiss) return;
+
         const hunger = parseInt(sliderHunger.value, 10);
         const energy = parseInt(sliderEnergy.value, 10);
         const stress = parseInt(sliderStress.value, 10);
@@ -119,7 +245,6 @@ document.addEventListener('DOMContentLoaded', () => {
         let thought = "Всё отлично, сижу красивая и вспоминаю твою улыбку 🌸✨";
         let mood = "idle";
 
-        // Logic for Avatar Mood & Speech
         if (hunger < 30) {
             thought = "В животике играет грустный кит... Где же пицца или шоколад? 🍕😿";
             mood = "sad";
@@ -137,7 +262,6 @@ document.addEventListener('DOMContentLoaded', () => {
             mood = "happy";
         }
 
-        // Check active tags for extra flair
         if (selectedTags.has('Хочу спать') && energy < 50) {
             thought = "Зеваю уже десятый раз... снись мне сегодня, пожалуйста! 💤✨";
             mood = "tired";
@@ -145,37 +269,33 @@ document.addEventListener('DOMContentLoaded', () => {
             thought = "Вкусный кофеек + мысли о тебе = идеальный час ☕💖";
         }
 
-        // Fade animation on thought update
-        speechBubble.classList.remove('opacity-100');
-        speechBubble.classList.add('opacity-0');
-        setTimeout(() => {
-            speechBubble.innerText = thought;
-            speechBubble.classList.remove('opacity-0');
-            speechBubble.classList.add('opacity-100');
-        }, 150);
+        if (speechBubble) {
+            speechBubble.classList.remove('opacity-100');
+            speechBubble.classList.add('opacity-0');
+            setTimeout(() => {
+                speechBubble.innerText = thought;
+                speechBubble.classList.remove('opacity-0');
+                speechBubble.classList.add('opacity-100');
+            }, 150);
+        }
 
-        // Update 3D avatar mood
         if (viewer) {
             viewer.setMood(mood);
         }
     };
 
-    // -------------------------------------------------------------
-    // 6. Slider Events
-    // -------------------------------------------------------------
+    // Slider Events
     const onSliderChange = (slider, label) => {
+        if (!slider || !label) return;
         label.innerText = `${slider.value}%`;
         haptic('light');
-        updateSpeechBubble();
+        updateSpeechBubbleFromSliders();
     };
 
-    sliderHunger.addEventListener('input', () => onSliderChange(sliderHunger, valHunger));
-    sliderEnergy.addEventListener('input', () => onSliderChange(sliderEnergy, valEnergy));
-    sliderStress.addEventListener('input', () => onSliderChange(sliderStress, valStress));
-    sliderMiss.addEventListener('input', () => onSliderChange(sliderMiss, valMiss));
-
-    // Initial update
-    updateSpeechBubble();
+    if (sliderHunger) sliderHunger.addEventListener('input', () => onSliderChange(sliderHunger, valHunger));
+    if (sliderEnergy) sliderEnergy.addEventListener('input', () => onSliderChange(sliderEnergy, valEnergy));
+    if (sliderStress) sliderStress.addEventListener('input', () => onSliderChange(sliderStress, valStress));
+    if (sliderMiss) sliderMiss.addEventListener('input', () => onSliderChange(sliderMiss, valMiss));
 
     // -------------------------------------------------------------
     // 7. Quick Tags (Chips) Interaction
@@ -195,108 +315,113 @@ document.addEventListener('DOMContentLoaded', () => {
                 selectedTags.add(tagName);
                 chip.classList.add('active-tag');
             }
-            updateSpeechBubble();
+            updateSpeechBubbleFromSliders();
         });
     });
 
     // -------------------------------------------------------------
     // 8. Submit Check-in Form
     // -------------------------------------------------------------
-    btnSubmit.addEventListener('click', async () => {
-        haptic('medium');
-        const submitText = btnSubmit.querySelector('.btn-text');
-        const submitSpinner = btnSubmit.querySelector('.btn-spinner');
+    if (btnSubmit) {
+        btnSubmit.addEventListener('click', async () => {
+            haptic('medium');
+            const submitText = btnSubmit.querySelector('.btn-text');
+            const submitSpinner = btnSubmit.querySelector('.btn-spinner');
 
-        submitText.classList.add('hidden');
-        submitSpinner.classList.remove('hidden');
-        btnSubmit.disabled = true;
+            if (submitText) submitText.classList.add('hidden');
+            if (submitSpinner) submitSpinner.classList.remove('hidden');
+            btnSubmit.disabled = true;
 
-        const payload = {
-            time_interval: timeIntervalInput.value.trim() || "14:00 - 15:00",
-            hunger: parseInt(sliderHunger.value, 10),
-            energy: parseInt(sliderEnergy.value, 10),
-            stress: parseInt(sliderStress.value, 10),
-            miss_you: parseInt(sliderMiss.value, 10),
-            tags: Array.from(selectedTags),
-            note: noteInput.value.trim(),
-            is_sos: false
-        };
+            const payload = {
+                time_interval: (timeIntervalInput && timeIntervalInput.value.trim()) || "14:00 - 15:00",
+                hunger: parseInt(sliderHunger ? sliderHunger.value : 70, 10),
+                energy: parseInt(sliderEnergy ? sliderEnergy.value : 70, 10),
+                stress: parseInt(sliderStress ? sliderStress.value : 20, 10),
+                miss_you: parseInt(sliderMiss ? sliderMiss.value : 85, 10),
+                tags: Array.from(selectedTags),
+                note: (noteInput && noteInput.value.trim()) || '',
+                is_sos: false
+            };
 
-        try {
-            const resp = await fetch('/api/checkin', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
-            });
-            const data = await resp.json();
+            try {
+                const resp = await fetch('/api/checkin', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const data = await resp.json();
 
-            if (resp.ok && data.status === 'success') {
-                haptic('success');
-                showNotificationToast('✨ Отчёт отправлен любимому в Telegram!', 'bg-emerald-500 text-white');
-                noteInput.value = '';
-                if (viewer) {
-                    viewer.triggerHeartBurst();
+                if (resp.ok && data.status === 'success') {
+                    haptic('success');
+                    showNotificationToast('✨ Отчёт отправлен любимому в Telegram!', 'bg-emerald-500 text-white');
+                    if (noteInput) noteInput.value = '';
+                    if (viewer) {
+                        viewer.jumpAndSpin();
+                    }
+                    loadRecentHistory();
+                    fetchTamagotchiStatus();
+                } else {
+                    throw new Error(data.detail || 'Не удалось отправить');
                 }
-                loadRecentHistory();
-            } else {
-                throw new Error(data.detail || 'Не удалось отправить');
+            } catch (err) {
+                console.error('Checkin error:', err);
+                haptic('error');
+                showNotificationToast('Ошибка при отправке, попробуй снова 😿', 'bg-rose-500 text-white');
+            } finally {
+                if (submitText) submitText.classList.remove('hidden');
+                if (submitSpinner) submitSpinner.classList.add('hidden');
+                btnSubmit.disabled = false;
             }
-        } catch (err) {
-            console.error('Checkin error:', err);
-            haptic('error');
-            showNotificationToast('Ошибка при отправке, попробуй снова 😿', 'bg-rose-500 text-white');
-        } finally {
-            submitText.classList.remove('hidden');
-            submitSpinner.classList.add('hidden');
-            btnSubmit.disabled = false;
-        }
-    });
+        });
+    }
 
     // -------------------------------------------------------------
     // 9. Emergency SOS Ping Button
     // -------------------------------------------------------------
-    btnSos.addEventListener('click', async () => {
-        haptic('heavy');
-        if (!confirm('Отправить экстренный SOS-пинг любимому? 🚨❤️')) return;
+    if (btnSos) {
+        btnSos.addEventListener('click', async () => {
+            haptic('heavy');
+            if (!confirm('Отправить экстренный SOS-пинг любимому? 🚨❤️')) return;
 
-        btnSos.disabled = true;
-        btnSos.classList.add('animate-pulse');
+            btnSos.disabled = true;
+            btnSos.classList.add('animate-pulse');
 
-        const payload = {
-            hunger: parseInt(sliderHunger.value, 10),
-            energy: parseInt(sliderEnergy.value, 10),
-            stress: parseInt(sliderStress.value, 10),
-            miss_you: parseInt(sliderMiss.value, 10),
-            note: noteInput.value.trim() || 'Срочно похвали / скажи, что любишь! 🥺💖'
-        };
+            const payload = {
+                hunger: parseInt(sliderHunger ? sliderHunger.value : 50, 10),
+                energy: parseInt(sliderEnergy ? sliderEnergy.value : 50, 10),
+                stress: parseInt(sliderStress ? sliderStress.value : 80, 10),
+                miss_you: parseInt(sliderMiss ? sliderMiss.value : 100, 10),
+                note: (noteInput && noteInput.value.trim()) || 'Срочно похвали / скажи, что любишь! 🥺💖'
+            };
 
-        try {
-            const resp = await fetch('/api/sos', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
-            });
-            const data = await resp.json();
+            try {
+                const resp = await fetch('/api/sos', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const data = await resp.json();
 
-            if (resp.ok) {
-                haptic('success');
-                showNotificationToast('🚨 SOS-алерт улетел парню с максимальным приоритетом!', 'bg-rose-600 text-white');
-                if (viewer) {
-                    viewer.triggerHeartBurst();
+                if (resp.ok) {
+                    haptic('success');
+                    showNotificationToast('🚨 SOS-алерт улетел парню с максимальным приоритетом!', 'bg-rose-600 text-white');
+                    if (viewer) {
+                        viewer.jumpAndSpin();
+                    }
+                    loadRecentHistory();
+                } else {
+                    throw new Error('SOS send failed');
                 }
-                loadRecentHistory();
-            } else {
-                throw new Error('SOS send failed');
+            } catch (err) {
+                console.error('SOS error:', err);
+                haptic('error');
+                showNotificationToast('Не удалось отправить SOS 😿', 'bg-rose-500 text-white');
+            } finally {
+                btnSos.disabled = false;
+                btnSos.classList.remove('animate-pulse');
             }
-        } catch (err) {
-            console.error('SOS error:', err);
-            haptic('error');
-            showNotificationToast('Не удалось отправить SOS 😿', 'bg-rose-500 text-white');
-        } finally {
-            btnSos.disabled = false;
-            btnSos.classList.remove('animate-pulse');
-        }
-    });
+        });
+    }
 
     // -------------------------------------------------------------
     // 10. Realtime Partner Reaction Polling
@@ -312,14 +437,15 @@ document.addEventListener('DOMContentLoaded', () => {
                     displayPartnerReaction(reaction);
                 });
                 loadRecentHistory();
+                fetchTamagotchiStatus();
             }
         } catch (err) {
             // Silently retry on next poll
         }
     };
 
-    // Poll every 3.5 seconds
-    setInterval(pollForReactions, 3500);
+    // Poll every 4 seconds
+    setInterval(pollForReactions, 4000);
 
     const displayPartnerReaction = (reaction) => {
         haptic('success');
@@ -328,20 +454,24 @@ document.addEventListener('DOMContentLoaded', () => {
         // 3D Avatar effect
         if (viewer) {
             viewer.setMood('happy');
-            viewer.triggerHeartBurst();
+            viewer.jumpAndSpin();
         }
 
         // Show Reaction Modal
-        reactionTitle.innerText = reaction.label;
-        reactionBody.innerText = reaction.message;
-        reactionModal.classList.remove('hidden');
-        reactionModal.classList.add('flex');
+        if (reactionTitle) reactionTitle.innerText = reaction.label;
+        if (reactionBody) reactionBody.innerText = reaction.message;
+        if (reactionModal) {
+            reactionModal.classList.remove('hidden');
+            reactionModal.classList.add('flex');
+        }
 
         // Dynamic thought update
-        speechBubble.innerText = `Ура! Любимый прислал реакцию: ${reaction.label} 🥰💖`;
+        if (speechBubble) {
+            speechBubble.innerText = `Ура! Любимый прислал реакцию: ${reaction.label} 🥰💖`;
+        }
     };
 
-    if (reactionClose) {
+    if (reactionClose && reactionModal) {
         reactionClose.addEventListener('click', () => {
             haptic('light');
             reactionModal.classList.add('hidden');

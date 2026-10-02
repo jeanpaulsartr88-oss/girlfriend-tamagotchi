@@ -26,7 +26,7 @@ from sqlalchemy.orm import Session
 from dotenv import load_dotenv
 
 from database import init_db, get_db, SessionLocal
-from models import CheckIn, Reaction
+from models import CheckIn, Reaction, TamagotchiState
 
 # Load environment variables
 load_dotenv()
@@ -103,6 +103,9 @@ templates.env.cache = None
 # ---------------------------------------------------------
 # Pydantic Schemas
 # ---------------------------------------------------------
+class TamagotchiActionRequest(BaseModel):
+    action: str = Field(..., description="Action name: feed, sleep, hug, kiss, miss")
+
 class CheckInCreate(BaseModel):
     time_interval: str = Field(..., description="Interval, e.g. 14:00 - 15:00")
     hunger: int = Field(70, ge=0, le=100)
@@ -291,6 +294,22 @@ def process_telegram_callback(callback_data: str, callback_id: str):
                 is_read=False
             )
             db.add(reaction)
+
+            # Sync Telegram action with Tamagotchi state
+            tg_to_action = {
+                "hug": "hug",
+                "treat": "feed",
+                "proud": "hug",
+                "kiss": "kiss",
+                "sos_praise": "hug",
+                "sos_food": "feed",
+                "sos_call": "miss"
+            }
+            if action_type in tg_to_action:
+                t_state = db.query(TamagotchiState).first()
+                if t_state:
+                    t_state.perform_action(tg_to_action[action_type])
+
             db.commit()
             print(f"[Reaction Logged] Saved reaction: {label} -> {message}")
         finally:
@@ -362,6 +381,45 @@ async def health_check():
         "service": "tamagotchi-girl",
         "timestamp": datetime.utcnow().isoformat(),
         "database": "connected"
+    }
+
+@app.get("/api/status")
+async def get_tamagotchi_status(db: Session = Depends(get_db)):
+    """Returns current Tamagotchi metrics (with time decay), status text, and mood."""
+    state = db.query(TamagotchiState).first()
+    if not state:
+        state = TamagotchiState()
+        db.add(state)
+        db.commit()
+        db.refresh(state)
+
+    state.apply_decay()
+    db.commit()
+    db.refresh(state)
+
+    return {
+        "status": "success",
+        "data": state.to_dict()
+    }
+
+@app.post("/api/action")
+async def perform_tamagotchi_action(action_data: TamagotchiActionRequest, db: Session = Depends(get_db)):
+    """Performs care action on Tamagotchi (feed, sleep, hug, kiss, miss)."""
+    state = db.query(TamagotchiState).first()
+    if not state:
+        state = TamagotchiState()
+        db.add(state)
+        db.commit()
+        db.refresh(state)
+
+    success, message = state.perform_action(action_data.action)
+    db.commit()
+    db.refresh(state)
+
+    return {
+        "status": "success" if success else "cooldown",
+        "message": message,
+        "data": state.to_dict()
     }
 
 @app.post("/api/checkin")

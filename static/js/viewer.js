@@ -67,33 +67,35 @@ class GirlAvatarViewer {
         window.addEventListener('resize', () => this.onWindowResize());
 
         // 10. Start Animation Loop
+        this.jumpTimer = 0;
+        this.spinBoost = 0;
         this.animate = this.animate.bind(this);
         requestAnimationFrame(this.animate);
     }
 
     setupLighting() {
         // Warm AmbientLight for soft pastel mood
-        const ambientLight = new THREE.AmbientLight(0xfff4e8, 1.1);
-        this.scene.add(ambientLight);
+        this.ambientLight = new THREE.AmbientLight(0xfff4e8, 1.1);
+        this.scene.add(this.ambientLight);
 
         // Soft DirectionalLight from front and top
-        const dirLight = new THREE.DirectionalLight(0xffffff, 1.25);
-        dirLight.position.set(1.5, 3.5, 2.5);
-        dirLight.castShadow = true;
-        dirLight.shadow.mapSize.width = 1024;
-        dirLight.shadow.mapSize.height = 1024;
-        dirLight.shadow.bias = -0.001;
-        this.scene.add(dirLight);
+        this.dirLight = new THREE.DirectionalLight(0xffffff, 1.25);
+        this.dirLight.position.set(1.5, 3.5, 2.5);
+        this.dirLight.castShadow = true;
+        this.dirLight.shadow.mapSize.width = 1024;
+        this.dirLight.shadow.mapSize.height = 1024;
+        this.dirLight.shadow.bias = -0.001;
+        this.scene.add(this.dirLight);
 
         // Soft pinkish rim light from behind for silhouette highlight
-        const rimLight = new THREE.DirectionalLight(0xffd1dc, 0.75);
-        rimLight.position.set(-2, 2.5, -2);
-        this.scene.add(rimLight);
+        this.rimLight = new THREE.DirectionalLight(0xffd1dc, 0.75);
+        this.rimLight.position.set(-2, 2.5, -2);
+        this.scene.add(this.rimLight);
 
         // Gentle front fill light
-        const frontFill = new THREE.PointLight(0xffe4e6, 0.45, 6);
-        frontFill.position.set(0, 0.2, 2.0);
-        this.scene.add(frontFill);
+        this.frontFill = new THREE.PointLight(0xffe4e6, 0.45, 6);
+        this.frontFill.position.set(0, 0.2, 2.0);
+        this.scene.add(this.frontFill);
     }
 
     setupFloorShadow() {
@@ -328,20 +330,61 @@ class GirlAvatarViewer {
         }
     }
 
+    jumpAndSpin() {
+        this.jumpTimer = 0.7;
+        this.spinBoost = 0.09;
+        this.triggerHeartBurst();
+    }
+
+    updateLighting(happiness = 85, energy = 80) {
+        if (!this.ambientLight || !this.dirLight) return;
+
+        if (energy < 30) {
+            // Drowsy / sleepy tone: soft cool lavender-blue
+            this.ambientLight.color.setHex(0xdbeafe);
+            this.dirLight.color.setHex(0xbfdbfe);
+            this.ambientLight.intensity = 0.85;
+            if (this.rimLight) this.rimLight.color.setHex(0x93c5fd);
+        } else if (happiness > 70) {
+            // Warm romantic golden-rose
+            this.ambientLight.color.setHex(0xffedd5);
+            this.dirLight.color.setHex(0xfff1f2);
+            this.ambientLight.intensity = 1.25;
+            if (this.rimLight) this.rimLight.color.setHex(0xfda4af);
+        } else {
+            // Normal warm white
+            this.ambientLight.color.setHex(0xfff4e8);
+            this.dirLight.color.setHex(0xffffff);
+            this.ambientLight.intensity = 1.1;
+            if (this.rimLight) this.rimLight.color.setHex(0xffd1dc);
+        }
+    }
+
     animate() {
         requestAnimationFrame(this.animate);
         const time = this.clock.getElapsedTime();
 
-        // 1. Requirement: Slow continuous auto-rotation around Y axis in requestAnimationFrame
+        // 1. Requirement: Slow continuous auto-rotation around Y axis + Jump arc
         if (this.modelPivot) {
             let rotSpeed = 0.007;
             if (this.currentMood === 'happy') rotSpeed = 0.012;
             else if (this.currentMood === 'tired') rotSpeed = 0.004;
 
+            if (this.spinBoost > 0) {
+                rotSpeed += this.spinBoost;
+                this.spinBoost = Math.max(0, this.spinBoost - 0.002);
+            }
             this.modelPivot.rotation.y += rotSpeed;
 
-            // Gentle subtle breathing float
-            this.modelPivot.position.y = Math.sin(time * 2.2) * 0.025;
+            // Gentle subtle breathing float + jump lerp
+            let posY = Math.sin(time * 2.2) * 0.025;
+            if (this.jumpTimer > 0) {
+                this.jumpTimer -= 0.016;
+                const progress = Math.max(0, Math.min(1, (0.7 - this.jumpTimer) / 0.7));
+                const jumpArc = Math.sin(progress * Math.PI) * 0.28;
+                posY += jumpArc;
+            }
+            this.modelPivot.position.y = posY;
         }
 
         // 2. Update OrbitControls damping

@@ -16,6 +16,19 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 def init_db():
     Base.metadata.create_all(bind=engine)
+    db = SessionLocal()
+    try:
+        from models import TamagotchiState
+        state = db.query(TamagotchiState).first()
+        if not state:
+            state = TamagotchiState(energy=85, hunger=80, happiness=90, love=95)
+            db.add(state)
+            db.commit()
+            print("Initial TamagotchiState seeded.")
+    except Exception as e:
+        print(f"Error seeding initial state: {e}")
+    finally:
+        db.close()
     print("Database tables initialized successfully.")
 
 def get_db():
