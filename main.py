@@ -1,8 +1,19 @@
+import sys
+
+# Configure UTF-8 for Windows console output to prevent UnicodeEncodeError with cp1251
+if sys.platform == "win32":
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
 import os
 import json
 import asyncio
 from datetime import datetime
 from typing import List, Optional
+from contextlib import asynccontextmanager
 
 import httpx
 from fastapi import FastAPI, Request, Depends, HTTPException, BackgroundTasks
@@ -25,10 +36,51 @@ WEBHOOK_URL = os.getenv("WEBHOOK_URL", "").strip()
 RENDER_EXTERNAL_URL = os.getenv("RENDER_EXTERNAL_URL", "").strip()
 USE_POLLING = os.getenv("USE_POLLING", "false").lower() in ("true", "1", "yes")
 
+# Polling task handle
+polling_task: Optional[asyncio.Task] = None
+
+
+# ---------------------------------------------------------
+# Lifespan Context Manager (Modern FastAPI 0.100+)
+# ---------------------------------------------------------
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup
+    init_db()
+    public_url = WEBHOOK_URL or RENDER_EXTERNAL_URL
+    global polling_task
+
+    if TELEGRAM_BOT_TOKEN:
+        if public_url and not USE_POLLING:
+            webhook_endpoint = f"{public_url.rstrip('/')}/api/telegram-webhook"
+            print(f"[Telegram Bot] Registering webhook to {webhook_endpoint}...")
+            try:
+                async with httpx.AsyncClient(timeout=10.0) as client:
+                    resp = await client.post(
+                        f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/setWebhook",
+                        json={"url": webhook_endpoint, "drop_pending_updates": False}
+                    )
+                    print(f"[Telegram Bot] setWebhook result: {resp.json()}")
+            except Exception as e:
+                print(f"[Telegram Bot] Webhook registration failed: {e}")
+        else:
+            # Run poller in background for local testing or explicit polling
+            polling_task = asyncio.create_task(telegram_polling_loop())
+    else:
+        print("[Telegram Bot] TELEGRAM_BOT_TOKEN is not configured. Running in standalone local mode.")
+
+    yield
+
+    # Shutdown
+    if polling_task:
+        polling_task.cancel()
+
+
 app = FastAPI(
     title="Tamagotchi Girlfriend Live Monitoring TWA",
     description="Telegram Mini App for tracking girlfriend's mood, hunger, energy & thoughts with 3D avatar",
-    version="1.0.0"
+    version="1.0.0",
+    lifespan=lifespan
 )
 
 # Enable CORS for Telegram WebApp environment
@@ -44,21 +96,18 @@ app.add_middleware(
 app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="templates")
 
-# Polling task handle
-polling_task: Optional[asyncio.Task] = None
-
 
 # ---------------------------------------------------------
 # Pydantic Schemas
 # ---------------------------------------------------------
 class CheckInCreate(BaseModel):
-    time_interval: str = Field(..., example="14:00 - 15:00")
+    time_interval: str = Field(..., description="Interval, e.g. 14:00 - 15:00")
     hunger: int = Field(70, ge=0, le=100)
     energy: int = Field(70, ge=0, le=100)
     stress: int = Field(20, ge=0, le=100)
     miss_you: int = Field(85, ge=0, le=100)
     tags: List[str] = Field(default_factory=list)
-    note: str = Field("", example="Сижу в кафе, пью латте и скучаю")
+    note: str = Field("", description="Checkin thought")
     is_sos: bool = False
 
 class SosCreate(BaseModel):
@@ -79,7 +128,7 @@ def make_progress_bar(value: int, emoji_fill: str = "🟩", emoji_empty: str = "
 
 async def send_telegram_message(text: str, reply_markup: Optional[dict] = None) -> Optional[dict]:
     if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
-        print("[Telegram Bot] Bot token or chat ID is not configured. Skipping telegram message.")
+        print("[Telegram Bot] Bot token or chat ID is not configured. (Skipping telegram notification in local mode)")
         return None
 
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
@@ -265,7 +314,6 @@ async def telegram_polling_loop():
                             process_telegram_callback(cb_data, cb_id)
                             await answer_callback_query(cb_id, "Отправлено любимой на экран! ✨")
                         elif "message" in update:
-                            # If partner sends a text reply to bot, treat as custom message
                             msg = update["message"]
                             sender_text = msg.get("text", "")
                             chat_id = str(msg.get("chat", {}).get("id", ""))
@@ -289,38 +337,6 @@ async def telegram_polling_loop():
             except Exception as e:
                 print(f"[Telegram Polling] Error: {e}")
                 await asyncio.sleep(5)
-
-
-# ---------------------------------------------------------
-# Lifecycle Events
-# ---------------------------------------------------------
-@app.on_event("startup")
-async def startup_event():
-    init_db()
-    public_url = WEBHOOK_URL or RENDER_EXTERNAL_URL
-    if TELEGRAM_BOT_TOKEN:
-        if public_url and not USE_POLLING:
-            webhook_endpoint = f"{public_url.rstrip('/')}/api/telegram-webhook"
-            print(f"[Telegram Bot] Registering webhook to {webhook_endpoint}...")
-            try:
-                async with httpx.AsyncClient(timeout=10.0) as client:
-                    resp = await client.post(f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/setWebhook", json={
-                        "url": webhook_endpoint,
-                        "drop_pending_updates": False
-                    })
-                    print(f"[Telegram Bot] setWebhook result: {resp.json()}")
-            except Exception as e:
-                print(f"[Telegram Bot] Webhook registration failed: {e}")
-        else:
-            # Run poller in background for local testing or explicit polling
-            global polling_task
-            polling_task = asyncio.create_task(telegram_polling_loop())
-
-@app.on_event("shutdown")
-async def shutdown_event():
-    global polling_task
-    if polling_task:
-        polling_task.cancel()
 
 
 # ---------------------------------------------------------
@@ -470,3 +486,16 @@ async def telegram_webhook(request: Request, background_tasks: BackgroundTasks):
                 db.close()
 
     return {"ok": True}
+
+
+# ---------------------------------------------------------
+# Local Execution Entry Point (python main.py)
+# ---------------------------------------------------------
+if __name__ == "__main__":
+    import uvicorn
+    port = int(os.getenv("PORT", 8000))
+    print("\n" + "=" * 60)
+    print("Tamagotchi Girlfriend Live Monitoring TWA is starting...")
+    print(f"Open in browser: http://localhost:{port} (or http://127.0.0.1:{port})")
+    print("=" * 60 + "\n")
+    uvicorn.run("main:app", host="0.0.0.0", port=port, reload=True)
