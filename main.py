@@ -17,6 +17,7 @@ from contextlib import asynccontextmanager
 
 import httpx
 from fastapi import FastAPI, Request, Depends, HTTPException, BackgroundTasks
+from fastapi.responses import HTMLResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.middleware.cors import CORSMiddleware
@@ -95,6 +96,8 @@ app.add_middleware(
 # Static and Templates
 app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="templates")
+# Disable Jinja2 cache to prevent Python 3.14 unhashable cache_key tuple bug on Render
+templates.env.cache = None
 
 
 # ---------------------------------------------------------
@@ -342,10 +345,13 @@ async def telegram_polling_loop():
 # ---------------------------------------------------------
 # API Endpoints
 # ---------------------------------------------------------
-@app.get("/")
+@app.get("/", response_class=HTMLResponse)
 async def root(request: Request):
     """Serves the main Telegram Mini App Single Page Application."""
-    return templates.TemplateResponse("index.html", {"request": request})
+    index_path = os.path.join("templates", "index.html")
+    if os.path.exists(index_path):
+        return FileResponse(index_path, media_type="text/html")
+    return templates.TemplateResponse(request=request, name="index.html")
 
 @app.get("/health")
 @app.get("/ping")
