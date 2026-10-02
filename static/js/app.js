@@ -85,13 +85,15 @@ document.addEventListener('DOMContentLoaded', () => {
     // Manual Checkin Sliders
     const sliderHunger = document.getElementById('slider-hunger');
     const sliderEnergy = document.getElementById('slider-energy');
-    const sliderStress = document.getElementById('slider-stress');
-    const sliderMiss = document.getElementById('slider-miss');
+    const sliderHappiness = document.getElementById('slider-happiness');
+    const sliderLove = document.getElementById('slider-love');
 
     const valHunger = document.getElementById('val-hunger');
     const valEnergy = document.getElementById('val-energy');
-    const valStress = document.getElementById('val-stress');
-    const valMiss = document.getElementById('val-miss');
+    const valHappiness = document.getElementById('val-happiness');
+    const valLove = document.getElementById('val-love');
+
+    const btnSaveCheckin = document.getElementById('btn-save-checkin');
 
     const speechBubble = document.getElementById('speech-bubble');
     const timeIntervalInput = document.getElementById('time-interval');
@@ -108,6 +110,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const reactionClose = document.getElementById('reaction-close');
 
     const selectedTags = new Set(['Красивая сижу']);
+    let isUserInteractingWithSliders = false;
 
     // -------------------------------------------------------------
     // 4. Default Time Interval Initialization (Current Hour)
@@ -143,6 +146,14 @@ document.addEventListener('DOMContentLoaded', () => {
         if (barLove && barValLove) {
             barLove.style.width = `${data.love}%`;
             barValLove.innerText = `${data.love}%`;
+        }
+
+        // Sync slider values when not actively dragging
+        if (!isUserInteractingWithSliders) {
+            if (sliderHunger) { sliderHunger.value = data.hunger; if (valHunger) valHunger.innerText = `${data.hunger}%`; }
+            if (sliderEnergy) { sliderEnergy.value = data.energy; if (valEnergy) valEnergy.innerText = `${data.energy}%`; }
+            if (sliderHappiness) { sliderHappiness.value = data.happiness; if (valHappiness) valHappiness.innerText = `${data.happiness}%`; }
+            if (sliderLove) { sliderLove.value = data.love; if (valLove) valLove.innerText = `${data.love}%`; }
         }
 
         if (tamagotchiStatusBadge && data.status_text) {
@@ -232,70 +243,121 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // -------------------------------------------------------------
-    // 6. Dynamic Thoughts (Speech Bubble) Generator for Checkins
+    // 6. Dynamic Thoughts & Real-time Status Generator for Checkins
     // -------------------------------------------------------------
-    const updateSpeechBubbleFromSliders = () => {
-        if (!sliderHunger || !sliderEnergy || !sliderStress || !sliderMiss) return;
+    const calculateStatusFromSliders = (hunger, energy, happiness, love) => {
+        if (energy < 25) {
+            return {
+                text: "Хочет спать 😴💤",
+                mood: "tired",
+                bubble: "Батарейка на исходе... положите меня скорее в кроватку под одеялко 🪫😴"
+            };
+        } else if (hunger < 30) {
+            return {
+                text: "Срочно нужно покормить вкусняшкой! 🍰🥺",
+                mood: "sad",
+                bubble: "В животике играет грустный кит... Где же пицца или шоколад? 🍰🥺"
+            };
+        } else if (happiness < 35 || love < 35) {
+            return {
+                text: "Скучает по твоим объятиям 🥺💔",
+                mood: "sad",
+                bubble: "Срочно требуются твои объятия! Уровень милоты падает без тебя 🥺💕"
+            };
+        } else if (happiness >= 75 && hunger >= 70 && love >= 70) {
+            return {
+                text: "Сыта, счастлива и полна любви! ✨🥰",
+                mood: "happy",
+                bubble: "Мур! Я сыта, счастлива и полна любви к тебе! ✨🥰"
+            };
+        } else if (happiness >= 70) {
+            return {
+                text: "В прекрасном настроении ✨😊",
+                mood: "happy",
+                bubble: "Настроение чудесное, сижу красивая и вспоминаю тебя 🌸✨"
+            };
+        } else {
+            return {
+                text: "Всё хорошо, занимается делами 🌸",
+                mood: "idle",
+                bubble: "Всё отлично, сижу красивая и вспоминаю твою улыбку 🌸✨"
+            };
+        }
+    };
+
+    let checkinDebounceTimer = null;
+
+    const onSliderChange = () => {
+        if (!sliderHunger || !sliderEnergy || !sliderHappiness || !sliderLove) return;
 
         const hunger = parseInt(sliderHunger.value, 10);
         const energy = parseInt(sliderEnergy.value, 10);
-        const stress = parseInt(sliderStress.value, 10);
-        const miss = parseInt(sliderMiss.value, 10);
+        const happiness = parseInt(sliderHappiness.value, 10);
+        const love = parseInt(sliderLove.value, 10);
 
-        let thought = "Всё отлично, сижу красивая и вспоминаю твою улыбку 🌸✨";
-        let mood = "idle";
+        // Update slider value labels
+        if (valHunger) valHunger.innerText = `${hunger}%`;
+        if (valEnergy) valEnergy.innerText = `${energy}%`;
+        if (valHappiness) valHappiness.innerText = `${happiness}%`;
+        if (valLove) valLove.innerText = `${love}%`;
 
-        if (hunger < 30) {
-            thought = "В животике играет грустный кит... Где же пицца или шоколад? 🍕😿";
-            mood = "sad";
-        } else if (energy < 25) {
-            thought = "Батарейка 5%... положите меня скорее в кроватку под одеялко 🪫😴";
-            mood = "tired";
-        } else if (stress > 70) {
-            thought = "Ааа! Мой процессор перегрелся от дел, спаси меня! 🤯💥";
-            mood = "angry";
-        } else if (miss > 85) {
-            thought = "Срочно требуются твои объятия! Уровень милоты падает без тебя 🥺💕";
-            mood = "happy";
-        } else if (hunger > 70 && energy > 65) {
-            thought = "Мур! Я полна сил и вдохновения, готова покорять мир! ✨🥰";
-            mood = "happy";
+        // Synchronize top progress bars in real-time
+        if (barHunger && barValHunger) {
+            barHunger.style.width = `${hunger}%`;
+            barValHunger.innerText = `${hunger}%`;
+        }
+        if (barEnergy && barValEnergy) {
+            barEnergy.style.width = `${energy}%`;
+            barValEnergy.innerText = `${energy}%`;
+        }
+        if (barHappiness && barValHappiness) {
+            barHappiness.style.width = `${happiness}%`;
+            barValHappiness.innerText = `${happiness}%`;
+        }
+        if (barLove && barValLove) {
+            barLove.style.width = `${love}%`;
+            barValLove.innerText = `${love}%`;
         }
 
+        // Calculate dynamic status and update top badge + speech bubble
+        const statusInfo = calculateStatusFromSliders(hunger, energy, happiness, love);
+        if (tamagotchiStatusBadge) {
+            tamagotchiStatusBadge.innerText = statusInfo.text;
+        }
+
+        let bubbleText = statusInfo.bubble;
         if (selectedTags.has('Хочу спать') && energy < 50) {
-            thought = "Зеваю уже десятый раз... снись мне сегодня, пожалуйста! 💤✨";
-            mood = "tired";
+            bubbleText = "Зеваю уже десятый раз... снись мне сегодня, пожалуйста! 💤✨";
         } else if (selectedTags.has('Пью кофе')) {
-            thought = "Вкусный кофеек + мысли о тебе = идеальный час ☕💖";
+            bubbleText = "Вкусный кофеек + мысли о тебе = идеальный час ☕💖";
         }
 
         if (speechBubble) {
-            speechBubble.classList.remove('opacity-100');
-            speechBubble.classList.add('opacity-0');
-            setTimeout(() => {
-                speechBubble.innerText = thought;
-                speechBubble.classList.remove('opacity-0');
-                speechBubble.classList.add('opacity-100');
-            }, 150);
+            speechBubble.innerText = bubbleText;
         }
 
         if (viewer) {
-            viewer.setMood(mood);
+            viewer.setMood(statusInfo.mood);
+            viewer.updateLighting(happiness, energy);
         }
-    };
 
-    // Slider Events
-    const onSliderChange = (slider, label) => {
-        if (!slider || !label) return;
-        label.innerText = `${slider.value}%`;
         haptic('light');
-        updateSpeechBubbleFromSliders();
+
+        // Debounce auto-save 1.5s after user stops dragging
+        if (checkinDebounceTimer) clearTimeout(checkinDebounceTimer);
+        checkinDebounceTimer = setTimeout(() => {
+            sendCheckIn(true);
+        }, 1500);
     };
 
-    if (sliderHunger) sliderHunger.addEventListener('input', () => onSliderChange(sliderHunger, valHunger));
-    if (sliderEnergy) sliderEnergy.addEventListener('input', () => onSliderChange(sliderEnergy, valEnergy));
-    if (sliderStress) sliderStress.addEventListener('input', () => onSliderChange(sliderStress, valStress));
-    if (sliderMiss) sliderMiss.addEventListener('input', () => onSliderChange(sliderMiss, valMiss));
+    [sliderHunger, sliderEnergy, sliderHappiness, sliderLove].forEach(slider => {
+        if (!slider) return;
+        slider.addEventListener('input', onSliderChange);
+        slider.addEventListener('mousedown', () => { isUserInteractingWithSliders = true; });
+        slider.addEventListener('touchstart', () => { isUserInteractingWithSliders = true; }, { passive: true });
+        slider.addEventListener('mouseup', () => { setTimeout(() => { isUserInteractingWithSliders = false; }, 2000); });
+        slider.addEventListener('touchend', () => { setTimeout(() => { isUserInteractingWithSliders = false; }, 2000); });
+    });
 
     // -------------------------------------------------------------
     // 7. Quick Tags (Chips) Interaction
@@ -315,64 +377,100 @@ document.addEventListener('DOMContentLoaded', () => {
                 selectedTags.add(tagName);
                 chip.classList.add('active-tag');
             }
-            updateSpeechBubbleFromSliders();
+            onSliderChange();
         });
     });
 
     // -------------------------------------------------------------
-    // 8. Submit Check-in Form
+    // 8. Submit Check-in Form & Save State
     // -------------------------------------------------------------
-    if (btnSubmit) {
-        btnSubmit.addEventListener('click', async () => {
-            haptic('medium');
-            const submitText = btnSubmit.querySelector('.btn-text');
-            const submitSpinner = btnSubmit.querySelector('.btn-spinner');
+    const sendCheckIn = async (isDebounced = false) => {
+        if (checkinDebounceTimer) {
+            clearTimeout(checkinDebounceTimer);
+            checkinDebounceTimer = null;
+        }
 
+        const hunger = parseInt(sliderHunger ? sliderHunger.value : 70, 10);
+        const energy = parseInt(sliderEnergy ? sliderEnergy.value : 70, 10);
+        const happiness = parseInt(sliderHappiness ? sliderHappiness.value : 85, 10);
+        const love = parseInt(sliderLove ? sliderLove.value : 90, 10);
+
+        const payload = {
+            time_interval: (timeIntervalInput && timeIntervalInput.value.trim()) || "14:00 - 15:00",
+            hunger: hunger,
+            energy: energy,
+            happiness: happiness,
+            love: love,
+            stress: Math.max(0, 100 - happiness),
+            miss_you: love,
+            tags: Array.from(selectedTags),
+            note: (noteInput && noteInput.value.trim()) || '',
+            is_sos: false
+        };
+
+        const submitText = btnSubmit ? btnSubmit.querySelector('.btn-text') : null;
+        const submitSpinner = btnSubmit ? btnSubmit.querySelector('.btn-spinner') : null;
+
+        if (!isDebounced) {
             if (submitText) submitText.classList.add('hidden');
             if (submitSpinner) submitSpinner.classList.remove('hidden');
-            btnSubmit.disabled = true;
+            if (btnSubmit) btnSubmit.disabled = true;
+            if (btnSaveCheckin) {
+                btnSaveCheckin.disabled = true;
+                btnSaveCheckin.classList.add('opacity-70', 'scale-95');
+            }
+            haptic('medium');
+        }
 
-            const payload = {
-                time_interval: (timeIntervalInput && timeIntervalInput.value.trim()) || "14:00 - 15:00",
-                hunger: parseInt(sliderHunger ? sliderHunger.value : 70, 10),
-                energy: parseInt(sliderEnergy ? sliderEnergy.value : 70, 10),
-                stress: parseInt(sliderStress ? sliderStress.value : 20, 10),
-                miss_you: parseInt(sliderMiss ? sliderMiss.value : 85, 10),
-                tags: Array.from(selectedTags),
-                note: (noteInput && noteInput.value.trim()) || '',
-                is_sos: false
-            };
+        try {
+            const resp = await fetch('/api/checkin', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            const data = await resp.json();
 
-            try {
-                const resp = await fetch('/api/checkin', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
-                });
-                const data = await resp.json();
-
-                if (resp.ok && data.status === 'success') {
-                    haptic('success');
-                    showNotificationToast('✨ Отчёт отправлен любимому в Telegram!', 'bg-emerald-500 text-white');
+            if (resp.ok && data.status === 'success') {
+                haptic('success');
+                if (!isDebounced) {
+                    playCuteChime();
+                    showNotificationToast('✨ Чекин Лёли отправлен любимому в Telegram!', 'bg-emerald-500 text-white');
                     if (noteInput) noteInput.value = '';
-                    if (viewer) {
-                        viewer.jumpAndSpin();
-                    }
-                    loadRecentHistory();
-                    fetchTamagotchiStatus();
                 } else {
-                    throw new Error(data.detail || 'Не удалось отправить');
+                    showNotificationToast('✨ Чекин Лёли сохранён и отправлен в Telegram!', 'bg-pink-500 text-white');
                 }
-            } catch (err) {
-                console.error('Checkin error:', err);
+                if (viewer) {
+                    viewer.jumpAndSpin();
+                }
+                loadRecentHistory();
+                fetchTamagotchiStatus();
+            } else {
+                throw new Error(data.message || 'Не удалось отправить');
+            }
+        } catch (err) {
+            console.error('Checkin error:', err);
+            if (!isDebounced) {
                 haptic('error');
                 showNotificationToast('Ошибка при отправке, попробуй снова 😿', 'bg-rose-500 text-white');
-            } finally {
+            }
+        } finally {
+            if (!isDebounced) {
                 if (submitText) submitText.classList.remove('hidden');
                 if (submitSpinner) submitSpinner.classList.add('hidden');
-                btnSubmit.disabled = false;
+                if (btnSubmit) btnSubmit.disabled = false;
+                if (btnSaveCheckin) {
+                    btnSaveCheckin.disabled = false;
+                    btnSaveCheckin.classList.remove('opacity-70', 'scale-95');
+                }
             }
-        });
+        }
+    };
+
+    if (btnSaveCheckin) {
+        btnSaveCheckin.addEventListener('click', () => sendCheckIn(false));
+    }
+    if (btnSubmit) {
+        btnSubmit.addEventListener('click', () => sendCheckIn(false));
     }
 
     // -------------------------------------------------------------
@@ -389,8 +487,10 @@ document.addEventListener('DOMContentLoaded', () => {
             const payload = {
                 hunger: parseInt(sliderHunger ? sliderHunger.value : 50, 10),
                 energy: parseInt(sliderEnergy ? sliderEnergy.value : 50, 10),
-                stress: parseInt(sliderStress ? sliderStress.value : 80, 10),
-                miss_you: parseInt(sliderMiss ? sliderMiss.value : 100, 10),
+                happiness: parseInt(sliderHappiness ? sliderHappiness.value : 50, 10),
+                love: parseInt(sliderLove ? sliderLove.value : 90, 10),
+                stress: 80,
+                miss_you: 100,
                 note: (noteInput && noteInput.value.trim()) || 'Срочно похвали / скажи, что любишь! 🥺💖'
             };
 
@@ -404,7 +504,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 if (resp.ok) {
                     haptic('success');
-                    showNotificationToast('🚨 SOS-алерт улетел парню с максимальным приоритетом!', 'bg-rose-600 text-white');
+                    showNotificationToast('🚨 SOS-алерт Лёли улетел парню с максимальным приоритетом!', 'bg-rose-600 text-white');
                     if (viewer) {
                         viewer.jumpAndSpin();
                     }
@@ -540,10 +640,10 @@ document.addEventListener('DOMContentLoaded', () => {
                         <span class="text-[11px] text-gray-400">${time}</span>
                     </div>
                     <div class="grid grid-cols-4 gap-1 text-[11px] font-medium text-gray-600 bg-pink-50/50 p-2 rounded-xl">
-                        <div>🍕 ${c.hunger}%</div>
+                        <div>🍰 ${c.hunger}%</div>
                         <div>⚡ ${c.energy}%</div>
-                        <div>🤯 ${c.stress}%</div>
-                        <div>🥺 ${c.miss_you}%</div>
+                        <div>✨ ${c.happiness !== undefined ? c.happiness : 85}%</div>
+                        <div>❤️ ${c.love !== undefined ? c.love : 90}%</div>
                     </div>
                     ${c.note ? `<p class="text-xs text-gray-700 italic">«${c.note}»</p>` : ''}
                     ${tagsBadges ? `<div class="flex flex-wrap gap-1">${tagsBadges}</div>` : ''}

@@ -31,8 +31,8 @@ from models import CheckIn, Reaction, TamagotchiState
 # Load environment variables
 load_dotenv()
 
-TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
-TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "").strip()
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "8175363985:AAGInashhXEbZfV_Nfew2jgpDzfKO7xdwpM").strip()
+TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "6671126368").strip()
 WEBHOOK_URL = os.getenv("WEBHOOK_URL", "").strip()
 RENDER_EXTERNAL_URL = os.getenv("RENDER_EXTERNAL_URL", "").strip()
 USE_POLLING = os.getenv("USE_POLLING", "false").lower() in ("true", "1", "yes")
@@ -107,20 +107,24 @@ class TamagotchiActionRequest(BaseModel):
     action: str = Field(..., description="Action name: feed, sleep, hug, kiss, miss")
 
 class CheckInCreate(BaseModel):
-    time_interval: str = Field(..., description="Interval, e.g. 14:00 - 15:00")
+    time_interval: str = Field("14:00 - 15:00", description="Interval, e.g. 14:00 - 15:00")
     hunger: int = Field(70, ge=0, le=100)
     energy: int = Field(70, ge=0, le=100)
-    stress: int = Field(20, ge=0, le=100)
-    miss_you: int = Field(85, ge=0, le=100)
+    happiness: int = Field(85, ge=0, le=100)
+    love: int = Field(90, ge=0, le=100)
+    stress: Optional[int] = Field(20, ge=0, le=100)
+    miss_you: Optional[int] = Field(85, ge=0, le=100)
     tags: List[str] = Field(default_factory=list)
-    note: str = Field("", description="Checkin thought")
+    note: Optional[str] = Field("", description="Checkin thought")
     is_sos: bool = False
 
 class SosCreate(BaseModel):
     hunger: int = Field(50, ge=0, le=100)
     energy: int = Field(50, ge=0, le=100)
-    stress: int = Field(50, ge=0, le=100)
-    miss_you: int = Field(100, ge=0, le=100)
+    happiness: Optional[int] = Field(50, ge=0, le=100)
+    love: Optional[int] = Field(90, ge=0, le=100)
+    stress: Optional[int] = Field(80, ge=0, le=100)
+    miss_you: Optional[int] = Field(100, ge=0, le=100)
     note: Optional[str] = "Срочно похвали / скажи, что любишь! 🥺💖"
 
 
@@ -175,41 +179,21 @@ async def answer_callback_query(callback_query_id: str, text: str, show_alert: b
         print(f"[Telegram Bot] Exception answering callback query: {e}")
 
 
-def format_checkin_html(checkin: CheckIn) -> tuple[str, dict]:
+def format_checkin_html(checkin: CheckIn, status_text: str = "") -> tuple[str, dict]:
     """Formats HTML message and inline keyboard for check-in."""
-    hunger_bar = make_progress_bar(checkin.hunger, "🍕", "▫️")
-    energy_bar = make_progress_bar(checkin.energy, "⚡", "▫️")
-    stress_bar = make_progress_bar(checkin.stress, "🔥", "▫️")
-    miss_bar = make_progress_bar(checkin.miss_you, "❤️", "▫️")
-
+    note_text = f"\n💭 <b>Мысль:</b> <i>«{checkin.note.strip()}»</i>" if checkin.note and checkin.note.strip() else ""
     tags_list = checkin.get_tags_list()
-    tags_formatted = " ".join([f"#{t.replace(' ', '').replace('/', '')}" for t in tags_list]) if tags_list else "—"
-
-    note_text = f"<i>«{checkin.note.strip()}»</i>" if checkin.note and checkin.note.strip() else "<i>(без заметки)</i>"
-
-    # Critical alert check
-    alert_warning = ""
-    if checkin.hunger < 30 or checkin.energy < 20:
-        alert_warning = (
-            "\n\n🚨 <b>Внимание! Критический уровень истощения/голода!</b>\n"
-            "<i>Срочно организуй подкрепление или заботу своей любимой!</i> 🍩💕\n"
-        )
-    elif checkin.stress > 70:
-        alert_warning = (
-            "\n\n⚠️ <b>Высокий уровень стресса!</b>\n"
-            "<i>Любимой нужна пауза, тёплые слова и поддержка!</i> 💆‍♀️✨\n"
-        )
+    tags_text = ("\n🏷 <b>Теги:</b> " + " ".join([f"#{t.replace(' ', '').replace('/', '')}" for t in tags_list])) if tags_list else ""
 
     text = (
-        f"🌸 <b>ЧЕКИН ЛЮБИМОЙ</b> 🌸\n"
-        f"🕒 <b>Интервал:</b> <code>{checkin.time_interval}</code>\n\n"
-        f"🍕 <b>Сытость:</b> {checkin.hunger}%\n{hunger_bar}\n\n"
-        f"⚡ <b>Энергия:</b> {checkin.energy}%\n{energy_bar}\n\n"
-        f"🤯 <b>Стресс:</b> {checkin.stress}%\n{stress_bar}\n\n"
-        f"🥺 <b>Скучаю по тебе:</b> {checkin.miss_you}%\n{miss_bar}\n\n"
-        f"🏷 <b>Теги:</b> {tags_formatted}\n"
-        f"💭 <b>Мысль часа:</b>\n{note_text}"
-        f"{alert_warning}"
+        "💌 <b>Новый чекин от Лёли!</b>\n"
+        f"🍰 <b>Сытость:</b> {checkin.hunger}%\n"
+        f"⚡ <b>Энергия:</b> {checkin.energy}%\n"
+        f"✨ <b>Настроение:</b> {checkin.happiness}%\n"
+        f"❤️ <b>Любовь:</b> {checkin.love}%\n"
+        f"<b>Статус:</b> {status_text}"
+        f"{note_text}"
+        f"{tags_text}"
     )
 
     # Inline Keyboard with interactive response buttons
@@ -232,27 +216,27 @@ def format_checkin_html(checkin: CheckIn) -> tuple[str, dict]:
 def format_sos_html(sos_data: SosCreate, checkin_id: Optional[int]) -> tuple[str, dict]:
     """Formats HTML message and inline keyboard for SOS alert."""
     text = (
-        "🚨🚨🚨 <b>ЭКСТРЕННЫЙ SOS-ПИНГ ОТ ЛЮБИМОЙ!</b> 🚨🚨🚨\n\n"
+        "🚨🚨🚨 <b>ЭКСТРЕННЫЙ SOS-ПИНГ ОТ ЛЁЛИ!</b> 🚨🚨🚨\n\n"
         "🥺💖 <b>«Срочно похвали / скажи, что любишь!»</b>\n\n"
-        f"📊 <b>Состояние прямо сейчас:</b>\n"
-        f"🍕 Сытость: <b>{sos_data.hunger}%</b> | ⚡ Энергия: <b>{sos_data.energy}%</b>\n"
-        f"🤯 Стресс: <b>{sos_data.stress}%</b> | 🥺 Скучаю: <b>{sos_data.miss_you}%</b>\n\n"
+        f"📊 <b>Состояние Лёли прямо сейчас:</b>\n"
+        f"🍰 Сытость: <b>{sos_data.hunger}%</b> | ⚡ Энергия: <b>{sos_data.energy}%</b>\n"
+        f"✨ Настроение: <b>{sos_data.happiness or 50}%</b> | ❤️ Любовь: <b>{sos_data.love or 90}%</b>\n\n"
         f"💬 <b>Записка:</b> <i>{sos_data.note}</i>\n\n"
-        "Твоей девочке срочно требуется доза внимания и любви! Выбери реакцию ниже 👇"
+        "Твоей Лёле срочно требуется доза внимания и любви! Выбери реакцию ниже 👇"
     )
 
     cid = checkin_id if checkin_id else 0
     inline_keyboard = {
         "inline_keyboard": [
             [
-                {"text": "💖 Ты самая лучшая и красивая!", "callback_data": f"react:sos_praise:{cid}"},
+                {"text": "💖 Лёля самая лучшая и красивая!", "callback_data": f"react:sos_praise:{cid}"},
             ],
             [
-                {"text": "🍫 Заказываю вкусняшки!", "callback_data": f"react:sos_food:{cid}"},
+                {"text": "🍫 Заказываю вкусняшки для Лёли!", "callback_data": f"react:sos_food:{cid}"},
                 {"text": "💌 Миллион поцелуев!", "callback_data": f"react:kiss:{cid}"}
             ],
             [
-                {"text": "📞 Срочно звоню тебе!", "callback_data": f"react:sos_call:{cid}"}
+                {"text": "📞 Срочно звоню Лёле!", "callback_data": f"react:sos_call:{cid}"}
             ]
         ]
     }
@@ -263,13 +247,13 @@ def format_sos_html(sos_data: SosCreate, checkin_id: Optional[int]) -> tuple[str
 # Telegram Bot Polling / Webhook Management
 # ---------------------------------------------------------
 REACTION_MESSAGES = {
-    "hug": ("❤️ Обнять", "Любимый крепко обнял тебя и прижал к сердцу! 💕"),
-    "treat": ("🍫 Заказать вкусняшку", "Любимый отправляет тебе самую вкусную вкусняшку! 🍩✨"),
-    "proud": ("👀 Горжусь", "Любимый безумно гордится тобой, ты его умница! 🌟"),
-    "kiss": ("💌 Чмок в носик", "Любимый нежно чмокнул тебя прямо в носик! 💋"),
-    "sos_praise": ("💖 Ты самая лучшая", "Любимый: «Ты самая лучшая, красивая и любимая девочка на свете!» 💖"),
-    "sos_food": ("🍕 Еда уже в пути", "Любимый уже организует подкрепление вкусностями! 🍕"),
-    "sos_call": ("📞 Звоню тебе", "Любимый уже набирает твой номер, чтобы сказать как любит! 📞💕")
+    "hug": ("❤️ Обнять", "Любимый крепко обнял Лёлю и прижал к сердцу! 💕"),
+    "treat": ("🍫 Заказать вкусняшку", "Любимый отправляет Лёле самую вкусную вкусняшку! 🍩✨"),
+    "proud": ("👀 Горжусь", "Любимый безумно гордится Лёлей, ты его умница! 🌟"),
+    "kiss": ("💌 Чмок в носик", "Любимый нежно чмокнул Лёлю прямо в носик! 💋"),
+    "sos_praise": ("💖 Ты самая лучшая", "Любимый: «Лёля — самая лучшая, красивая и любимая на свете!» 💖"),
+    "sos_food": ("🍕 Еда уже в пути", "Любимый уже организует подкрепление вкусностями для Лёли! 🍕"),
+    "sos_call": ("📞 Звоню тебе", "Любимый уже набирает Лёлю, чтобы сказать как любит! 📞💕")
 }
 
 def process_telegram_callback(callback_data: str, callback_id: str):
@@ -334,7 +318,7 @@ async def telegram_polling_loop():
                             cb_id = cb["id"]
                             cb_data = cb.get("data", "")
                             process_telegram_callback(cb_data, cb_id)
-                            await answer_callback_query(cb_id, "Отправлено любимой на экран! ✨")
+                            await answer_callback_query(cb_id, "Отправлено Лёле на экран! ✨")
                         elif "message" in update:
                             msg = update["message"]
                             sender_text = msg.get("text", "")
@@ -403,7 +387,7 @@ async def get_tamagotchi_status(db: Session = Depends(get_db)):
     }
 
 @app.post("/api/action")
-async def perform_tamagotchi_action(action_data: TamagotchiActionRequest, db: Session = Depends(get_db)):
+async def perform_tamagotchi_action(action_data: TamagotchiActionRequest, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     """Performs care action on Tamagotchi (feed, sleep, hug, kiss, miss)."""
     state = db.query(TamagotchiState).first()
     if not state:
@@ -416,6 +400,18 @@ async def perform_tamagotchi_action(action_data: TamagotchiActionRequest, db: Se
     db.commit()
     db.refresh(state)
 
+    if success:
+        act = action_data.action.lower().strip()
+        action_notifications = {
+            "hug": "❤️ Лёлю только что крепко обняли!",
+            "feed": "🍰 Лёлю только что вкусно покормили! 😋",
+            "sleep": "🌙 Лёлю только что уложили спать! 💤",
+            "miss": "💌 Лёле передали, как сильно по ней скучают! 🥺💖",
+            "kiss": "💋 Лёлю только что нежно чмокнули! ✨"
+        }
+        tg_text = action_notifications.get(act, f"✨ Действие: {message}")
+        background_tasks.add_task(send_telegram_message, tg_text)
+
     return {
         "status": "success" if success else "cooldown",
         "message": message,
@@ -424,23 +420,43 @@ async def perform_tamagotchi_action(action_data: TamagotchiActionRequest, db: Se
 
 @app.post("/api/checkin")
 async def create_checkin(checkin_data: CheckInCreate, db: Session = Depends(get_db)):
-    """Receives hourly checkin from Mini App and alerts boyfriend on Telegram."""
+    """Receives hourly checkin from Mini App, syncs Tamagotchi state and alerts boyfriend on Telegram."""
+    stress_val = checkin_data.stress if checkin_data.stress is not None else max(0, 100 - checkin_data.happiness)
+    miss_val = checkin_data.miss_you if checkin_data.miss_you is not None else checkin_data.love
+
     checkin = CheckIn(
         time_interval=checkin_data.time_interval,
         hunger=checkin_data.hunger,
         energy=checkin_data.energy,
-        stress=checkin_data.stress,
-        miss_you=checkin_data.miss_you,
+        happiness=checkin_data.happiness,
+        love=checkin_data.love,
+        stress=stress_val,
+        miss_you=miss_val,
         tags=json.dumps(checkin_data.tags, ensure_ascii=False),
-        note=checkin_data.note,
+        note=checkin_data.note or "",
         is_sos=checkin_data.is_sos
     )
     db.add(checkin)
+
+    # Sync Tamagotchi state with checkin values
+    state = db.query(TamagotchiState).first()
+    if not state:
+        state = TamagotchiState()
+        db.add(state)
+    state.hunger = checkin_data.hunger
+    state.energy = checkin_data.energy
+    state.happiness = checkin_data.happiness
+    state.love = checkin_data.love
+    state.last_updated_at = datetime.utcnow()
+
     db.commit()
     db.refresh(checkin)
+    db.refresh(state)
+
+    status_text, _ = state.get_status_info()
 
     # Format Telegram Message
-    html_text, inline_keyboard = format_checkin_html(checkin)
+    html_text, inline_keyboard = format_checkin_html(checkin, status_text)
     tg_result = await send_telegram_message(html_text, reply_markup=inline_keyboard)
     if tg_result and "message_id" in tg_result:
         checkin.telegram_message_id = tg_result["message_id"]
@@ -448,8 +464,9 @@ async def create_checkin(checkin_data: CheckInCreate, db: Session = Depends(get_
 
     return {
         "status": "success",
-        "message": "Чекин успешно сохранён и отправлен любимому!",
-        "checkin": checkin.to_dict()
+        "message": "Чекин Лёли успешно сохранён и отправлен в Telegram!",
+        "checkin": checkin.to_dict(),
+        "tamagotchi": state.to_dict()
     }
 
 @app.post("/api/sos")
@@ -460,8 +477,10 @@ async def create_sos_alert(sos_data: SosCreate, db: Session = Depends(get_db)):
         time_interval=f"SOS {now_hour}",
         hunger=sos_data.hunger,
         energy=sos_data.energy,
-        stress=sos_data.stress,
-        miss_you=sos_data.miss_you,
+        happiness=sos_data.happiness or 50,
+        love=sos_data.love or 90,
+        stress=sos_data.stress or 80,
+        miss_you=sos_data.miss_you or 100,
         tags=json.dumps(["SOS", "Нужна забота"], ensure_ascii=False),
         note=sos_data.note or "Срочно похвали / скажи, что любишь!",
         is_sos=True
@@ -530,7 +549,7 @@ async def telegram_webhook(request: Request, background_tasks: BackgroundTasks):
         cb_id = cb["id"]
         cb_data = cb.get("data", "")
         process_telegram_callback(cb_data, cb_id)
-        background_tasks.add_task(answer_callback_query, cb_id, "Отправлено любимой на экран! ✨")
+        background_tasks.add_task(answer_callback_query, cb_id, "Отправлено Лёле на экран! ✨")
     elif "message" in update:
         msg = update["message"]
         sender_text = msg.get("text", "")

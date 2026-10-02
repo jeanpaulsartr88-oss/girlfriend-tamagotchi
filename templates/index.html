@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Тамагочи Любимой ✨</title>
+    <title>Тамагочи Лёли ✨</title>
     
     <!-- Telegram Mini App SDK -->
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
@@ -25,7 +25,7 @@
     <div class="sticky top-0 z-40 bg-white/70 backdrop-blur-md border-b border-pink-100/60 px-4 py-2.5 flex items-center justify-between shadow-xs">
         <div class="flex items-center gap-2">
             <span class="text-lg">💖</span>
-            <span class="font-bold text-sm tracking-tight text-gray-800">Тамагочи Любимой</span>
+            <span class="font-bold text-sm tracking-tight text-gray-800">Тамагочи Лёли</span>
         </div>
         <div class="flex items-center gap-1.5 bg-emerald-50 border border-emerald-200/80 px-2.5 py-1 rounded-full">
             <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
@@ -60,7 +60,7 @@
             <!-- Header with current status title -->
             <div class="flex items-center justify-between">
                 <span class="text-xs uppercase tracking-wider font-extrabold text-pink-600/90 flex items-center gap-1.5">
-                    <span>💖</span> Тамагочи Любимой
+                    <span>💖</span> Тамагочи Лёли
                 </span>
                 <span id="tamagotchi-status-badge" class="bg-pink-100/90 text-pink-700 px-2.5 py-0.5 rounded-full text-[11px] font-bold truncate max-w-[200px]">
                     Загрузка...
@@ -138,13 +138,13 @@
         <!-- Sliders Section (Ручной чекин) -->
         <section class="glass-panel rounded-3xl p-4.5 shadow-sm space-y-3.5">
             <h2 class="text-xs uppercase tracking-wider font-extrabold text-pink-600/90 flex items-center gap-1.5">
-                <span>📝</span> Почасовой чекин любимой
+                <span>📝</span> Почасовой чекин Лёли
             </h2>
 
             <!-- Slider 1: Сытость -->
             <div class="space-y-1">
                 <div class="flex justify-between items-center text-xs font-semibold">
-                    <span class="flex items-center gap-1 text-gray-700">🍕 Сытость</span>
+                    <span class="flex items-center gap-1 text-gray-700">🍰 Сытость</span>
                     <span id="val-hunger" class="bg-pink-100/80 text-pink-700 px-2 py-0.5 rounded-full text-[11px] font-bold">70%</span>
                 </div>
                 <input type="range" id="slider-hunger" min="0" max="100" value="70">
@@ -158,40 +158,46 @@
             <div class="space-y-1">
                 <div class="flex justify-between items-center text-xs font-semibold">
                     <span class="flex items-center gap-1 text-gray-700">⚡ Энергия</span>
-                    <span id="val-energy" class="bg-amber-100/80 text-amber-700 px-2 py-0.5 rounded-full text-[11px] font-bold">75%</span>
+                    <span id="val-energy" class="bg-amber-100/80 text-amber-700 px-2 py-0.5 rounded-full text-[11px] font-bold">70%</span>
                 </div>
-                <input type="range" id="slider-energy" min="0" max="100" value="75">
+                <input type="range" id="slider-energy" min="0" max="100" value="70">
                 <div class="flex justify-between text-[10px] text-gray-400 font-medium">
                     <span>Тряпочка</span>
                     <span>Горы сверну</span>
                 </div>
             </div>
 
-            <!-- Slider 3: Стресс -->
+            <!-- Slider 3: Настроение / Счастье -->
             <div class="space-y-1">
                 <div class="flex justify-between items-center text-xs font-semibold">
-                    <span class="flex items-center gap-1 text-gray-700">🤯 Уровень стресса</span>
-                    <span id="val-stress" class="bg-purple-100/80 text-purple-700 px-2 py-0.5 rounded-full text-[11px] font-bold">25%</span>
+                    <span class="flex items-center gap-1 text-gray-700">✨ Настроение</span>
+                    <span id="val-happiness" class="bg-purple-100/80 text-purple-700 px-2 py-0.5 rounded-full text-[11px] font-bold">85%</span>
                 </div>
-                <input type="range" id="slider-stress" min="0" max="100" value="25">
+                <input type="range" id="slider-happiness" min="0" max="100" value="85">
                 <div class="flex justify-between text-[10px] text-gray-400 font-medium">
-                    <span>Полный дзен</span>
-                    <span>Ааа, паника!</span>
+                    <span>Грущу</span>
+                    <span>Свечусь от счастья</span>
                 </div>
             </div>
 
-            <!-- Slider 4: Скучаю -->
+            <!-- Slider 4: Любовь -->
             <div class="space-y-1">
                 <div class="flex justify-between items-center text-xs font-semibold">
-                    <span class="flex items-center gap-1 text-gray-700">🥺 Скучаю по тебе</span>
-                    <span id="val-miss" class="bg-rose-100/80 text-rose-700 px-2 py-0.5 rounded-full text-[11px] font-bold">85%</span>
+                    <span class="flex items-center gap-1 text-gray-700">❤️ Любовь</span>
+                    <span id="val-love" class="bg-rose-100/80 text-rose-700 px-2 py-0.5 rounded-full text-[11px] font-bold">90%</span>
                 </div>
-                <input type="range" id="slider-miss" min="0" max="100" value="85">
+                <input type="range" id="slider-love" min="0" max="100" value="90">
                 <div class="flex justify-between text-[10px] text-gray-400 font-medium">
-                    <span>Чуть-чуть</span>
-                    <span>Невыносимо сильно</span>
+                    <span>Мало внимания</span>
+                    <span>Утопаю в любви</span>
                 </div>
             </div>
+
+            <!-- Dedicated Button: Отправить чекин / Сохранить состояние -->
+            <button id="btn-save-checkin" type="button" class="w-full mt-2 py-3 px-4 rounded-2xl bg-gradient-to-r from-pink-500 via-rose-500 to-pink-600 text-white font-extrabold text-xs shadow-md shadow-pink-500/25 active:scale-95 transition-all flex items-center justify-center gap-2">
+                <span>💾</span>
+                <span>Отправить чекин / Сохранить состояние</span>
+            </button>
         </section>
 
         <!-- Quick Tags (Chips) Section -->
@@ -270,7 +276,7 @@
             </div>
             <div class="space-y-1.5">
                 <h3 id="reaction-title" class="text-base font-extrabold text-gray-800">Реакция от любимого!</h3>
-                <p id="reaction-body" class="text-xs text-gray-600 font-medium">Любимый крепко обнял тебя и прижал к сердцу!</p>
+                <p id="reaction-body" class="text-xs text-gray-600 font-medium">Любимый крепко обнял Лёлю и прижал к сердцу! 💕</p>
             </div>
             <button id="reaction-close" type="button" class="w-full py-2.5 bg-gradient-to-r from-pink-500 to-rose-500 text-white font-bold text-xs rounded-xl shadow-md active:scale-95 transition-transform">
                 Мур, спасибо! 🥰

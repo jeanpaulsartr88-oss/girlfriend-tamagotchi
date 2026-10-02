@@ -58,13 +58,13 @@ class TamagotchiState(Base):
         if action == "feed":
             self.hunger = min(100, self.hunger + 25)
             self.happiness = min(100, self.happiness + 8)
-            message = "Любимая с удовольствием скушала вкусняшку! 🍰✨"
+            message = "Лёля с удовольствием скушала вкусняшку! 🍰✨"
             return True, message
 
         elif action == "sleep":
             self.energy = min(100, self.energy + 35)
             self.happiness = min(100, self.happiness + 5)
-            message = "Любимая сладко поспала и набралась сил! 🌙💤"
+            message = "Лёля сладко поспала и набралась сил! 🌙💤"
             return True, message
 
         elif action in ("hug", "kiss", "miss"):
@@ -72,13 +72,13 @@ class TamagotchiState(Base):
             if self.last_hug_at:
                 cooldown_remaining = 20 - (now - self.last_hug_at).total_seconds()
                 if cooldown_remaining > 0:
-                    return False, f"Любимая ещё тает от прошлых объятий! Подожди {int(cooldown_remaining)} сек 💕"
+                    return False, f"Лёля ещё тает от прошлых объятий! Подожди {int(cooldown_remaining)} сек 💕"
 
             self.last_hug_at = now
             if action == "hug":
                 self.happiness = min(100, self.happiness + 20)
                 self.love = min(100, self.love + 15)
-                message = "Крепкие объятия! Любимая улыбается и светится от счастья! ❤️🥰"
+                message = "Крепкие объятия! Лёля улыбается и светится от счастья! ❤️🥰"
             elif action == "kiss":
                 self.happiness = min(100, self.happiness + 18)
                 self.love = min(100, self.love + 18)
@@ -86,7 +86,7 @@ class TamagotchiState(Base):
             else: # miss
                 self.happiness = min(100, self.happiness + 15)
                 self.love = min(100, self.love + 20)
-                message = "Любимая почувствовала, как сильно ты по ней скучаешь! 🥺💖"
+                message = "Лёля почувствовала, как сильно ты по ней скучаешь! 🥺💖"
             return True, message
 
         return False, "Неизвестное действие"
@@ -94,15 +94,17 @@ class TamagotchiState(Base):
     def get_status_info(self):
         """Returns readable status text and avatar mood based on current stats."""
         if self.energy < 25:
-            return "Очень хочет спать 😴💤", "tired"
+            return "Хочет спать 😴💤", "tired"
         elif self.hunger < 30:
-            return "Проголодалась, хочет вкусняшку 🍰🥺", "sad"
+            return "Срочно нужно покормить вкусняшкой! 🍰🥺", "sad"
         elif self.happiness < 35 or self.love < 35:
             return "Скучает по твоим объятиям 🥺💔", "sad"
-        elif self.happiness >= 75 and self.hunger >= 70:
+        elif self.happiness >= 75 and self.hunger >= 70 and self.love >= 70:
             return "Сыта, счастлива и полна любви! ✨🥰", "happy"
+        elif self.happiness >= 70:
+            return "В прекрасном настроении ✨😊", "happy"
         else:
-            return "Всё хорошо, занимается делами и думает о тебе 🌸", "idle"
+            return "Всё хорошо, занимается делами 🌸", "idle"
 
     def to_dict(self):
         status_text, mood = self.get_status_info()
@@ -125,6 +127,8 @@ class CheckIn(Base):
     time_interval = Column(String(50), nullable=False)
     hunger = Column(Integer, default=70)
     energy = Column(Integer, default=70)
+    happiness = Column(Integer, default=85)
+    love = Column(Integer, default=90)
     stress = Column(Integer, default=20)
     miss_you = Column(Integer, default=85)
     tags = Column(Text, default="[]")
@@ -147,6 +151,8 @@ class CheckIn(Base):
             "time_interval": self.time_interval,
             "hunger": self.hunger,
             "energy": self.energy,
+            "happiness": self.happiness,
+            "love": self.love,
             "stress": self.stress,
             "miss_you": self.miss_you,
             "tags": self.get_tags_list(),

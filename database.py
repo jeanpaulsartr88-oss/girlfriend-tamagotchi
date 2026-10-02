@@ -14,8 +14,24 @@ connect_args = {"check_same_thread": False} if DB_PATH.startswith("sqlite") else
 engine = create_engine(DB_PATH, connect_args=connect_args, pool_pre_ping=True)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
+from sqlalchemy import text
+
 def init_db():
     Base.metadata.create_all(bind=engine)
+    # Check for missing columns in existing SQLite db
+    try:
+        with engine.connect() as conn:
+            result = conn.execute(text("PRAGMA table_info(checkins);"))
+            columns = [row[1] for row in result.fetchall()]
+            if columns:
+                if "happiness" not in columns:
+                    conn.execute(text("ALTER TABLE checkins ADD COLUMN happiness INTEGER DEFAULT 85;"))
+                if "love" not in columns:
+                    conn.execute(text("ALTER TABLE checkins ADD COLUMN love INTEGER DEFAULT 90;"))
+                conn.commit()
+    except Exception as e:
+        print(f"Migration note: {e}")
+
     db = SessionLocal()
     try:
         from models import TamagotchiState
