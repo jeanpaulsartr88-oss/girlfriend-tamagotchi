@@ -7,6 +7,6 @@ echo.
 echo Открытие сайта в браузере: http://localhost:8000
 start http://localhost:8000
 echo.
-echo Запуск локального сервера FastAPI...
-python main.py
+echo Запуск локального сервера Flask...
+python app.py
 pause
