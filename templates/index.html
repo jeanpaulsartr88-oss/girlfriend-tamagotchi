@@ -690,8 +690,9 @@ function updateSpeech(customText = null) {
 const wrap = $('canvas-wrap');
 let scene, camera, renderer, clock;
 let charGroup = null;
-const baseY = -0.52;
-const baseScale = 1.35;
+let contactShadowMesh = null;
+const baseY = 0;
+const baseScale = 1.45;
 
 // Кости Mixamo
 const bones = {
@@ -708,37 +709,37 @@ let smoothedVolume = 0;
 let isBlinking = false;
 let pointer = { x: 0, y: 0 };
 let targetPointer = { x: 0, y: 0 };
-const cameraLookTarget = { x: 0, y: 0.20, z: 0 };
+const cameraLookTarget = { x: 0, y: 0.82, z: 0 };
 
-// 4 комнаты: разделение по оси X
+// 4 комнаты: разделение по оси X с кинематографичными ракурсами камеры
 const ROOM_CONFIGS = {
   living: {
     name: 'Гостиная',
     xOffset: 0,
-    camPos: { x: 0, y: 0.35, z: 2.15 },
-    lookAt: { x: 0, y: 0.20, z: 0 },
-    charPos: { x: 0, y: baseY, z: 0 }
+    camPos: { x: 0, y: 1.15, z: 2.55 },
+    lookAt: { x: 0, y: 0.82, z: 0 },
+    charPos: { x: 0, y: 0, z: 0 }
   },
   kitchen: {
     name: 'Кухня',
     xOffset: 14,
-    camPos: { x: 14.0, y: 0.42, z: 2.25 },
-    lookAt: { x: 14.0, y: 0.12, z: 0.4 },
-    charPos: { x: 14, y: 0.05, z: 0.2 }
+    camPos: { x: 14.0, y: 1.10, z: 2.35 },
+    lookAt: { x: 14.0, y: 0.72, z: 0.4 },
+    charPos: { x: 14, y: 0.12, z: 0.30 }
   },
   bathroom: {
     name: 'Ванная',
     xOffset: 28,
-    camPos: { x: 28.0, y: 0.35, z: 2.15 },
-    lookAt: { x: 28.0, y: 0.20, z: 0 },
-    charPos: { x: 28, y: baseY, z: 0 }
+    camPos: { x: 28.0, y: 1.15, z: 2.50 },
+    lookAt: { x: 28.0, y: 0.80, z: 0 },
+    charPos: { x: 28, y: 0.02, z: 0 }
   },
   bedroom: {
     name: 'Спальня',
     xOffset: 42,
-    camPos: { x: 42.0, y: 0.48, z: 2.45 },
-    lookAt: { x: 42.0, y: 0.15, z: -0.1 },
-    charPos: { x: 42, y: 0.05, z: 0.45 }
+    camPos: { x: 42.0, y: 1.15, z: 2.45 },
+    lookAt: { x: 42.0, y: 0.70, z: 0 },
+    charPos: { x: 42, y: 0.25, z: 0.60 }
   }
 };
 
@@ -757,14 +758,37 @@ let activeBathroomTool = null; // 'sponge' | 'shower' | null
 let waterParticlesMesh = null;
 let waterDropsData = [];
 
-// PBR материал пены (полупрозрачная мыльная пена)
+// PBR материал пены (нежная полупрозрачная мыльная пена)
 const foamMaterial = new THREE.MeshPhysicalMaterial({
   color: 0xffffff,
-  roughness: 0.2,
-  transmission: 0.6, // полупрозрачность мыла
-  thickness: 0.5,
-  ior: 1.33
+  roughness: 0.1,
+  transmission: 0.85,
+  thickness: 0.1,
+  ior: 1.33,
+  clearcoat: 0.8,
+  clearcoatRoughness: 0.1
 });
+
+// Создание мягкой контактной тени под персонажем
+function createContactShadow() {
+  const canvas = document.createElement('canvas');
+  canvas.width = 128; canvas.height = 128;
+  const ctx = canvas.getContext('2d');
+  const grad = ctx.createRadialGradient(64, 64, 4, 64, 64, 60);
+  grad.addColorStop(0, 'rgba(0, 0, 0, 0.45)');
+  grad.addColorStop(0.5, 'rgba(0, 0, 0, 0.20)');
+  grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, 128, 128);
+
+  const tex = new THREE.CanvasTexture(canvas);
+  const geo = new THREE.PlaneGeometry(0.75, 0.75);
+  const mat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false });
+  const shadow = new THREE.Mesh(geo, mat);
+  shadow.rotation.x = -Math.PI / 2;
+  shadow.position.set(0, 0.003, 0);
+  return shadow;
+}
 
 function initThreeScene() {
   const W = wrap.clientWidth || window.innerWidth;
@@ -775,7 +799,7 @@ function initThreeScene() {
   clock = new THREE.Clock();
 
   camera = new THREE.PerspectiveCamera(38, W / H, 0.1, 100);
-  camera.position.set(0, 0.35, 2.15);
+  camera.position.set(0, 1.15, 2.55);
 
   renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: 'high-performance' });
   renderer.setSize(W, H);
@@ -798,6 +822,10 @@ function initThreeScene() {
   // Глобальный рассеянный свет не выше 0.2
   const globalAmbient = new THREE.AmbientLight(0xffffff, 0.15);
   scene.add(globalAmbient);
+
+  // Мягкая контактная тень под ногами персонажа
+  contactShadowMesh = createContactShadow();
+  scene.add(contactShadowMesh);
 
   // 2. Строим 4 изолированные комнаты вдоль оси X
   buildLivingRoom(ROOM_CONFIGS.living.xOffset);
@@ -840,6 +868,7 @@ function buildLivingRoom(ox) {
   const baseboardMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.35 });
   const bb = new THREE.Mesh(new THREE.BoxGeometry(5.2, 0.12, 0.05), baseboardMat);
   bb.position.set(0, baseY + 0.06, -2.08);
+  bb.receiveShadow = true;
   group.add(bb);
 
   // Уютный круглый ковер с ворсистым рельефом
@@ -855,6 +884,7 @@ function buildLivingRoom(ox) {
   const posterGroup = new THREE.Group();
   posterGroup.position.set(-0.95, baseY + 1.85, -2.07);
   const frame = new THREE.Mesh(new THREE.BoxGeometry(0.88, 0.68, 0.04), new THREE.MeshStandardMaterial({ color: 0xd97706, roughness: 0.35, metalness: 0.1 }));
+  frame.castShadow = true;
   posterGroup.add(frame);
   const pCanvas = document.createElement('canvas');
   pCanvas.width = 256; pCanvas.height = 192;
@@ -889,7 +919,7 @@ function buildLivingRoom(ox) {
   scene.add(group);
 }
 
-// ─── 2. КУХНЯ (X = 14): ОБЕДЕННЫЙ СТОЛ, ШКАФЧИКИ, БРА ─────────────────────────
+// ─── 2. КУХНЯ (X = 14): ОБЕДЕННЫЙ СТОЛ, СТУЛ СО СПИНКОЙ, ШКАФЧИКИ, БРА ────────
 function buildKitchenRoom(ox) {
   const group = new THREE.Group();
   group.position.x = ox;
@@ -918,49 +948,117 @@ function buildKitchenRoom(ox) {
 
   const cab1 = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.75, 0.35), cabMat);
   cab1.castShadow = true;
+  cab1.receiveShadow = true;
   cabGroup.add(cab1);
 
   // Хромированные ручки шкафчиков
   [-0.35, 0.35].forEach(hx => {
     const handle = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.02, 0.03), handleMat);
     handle.position.set(hx, -0.22, 0.19);
+    handle.castShadow = true;
     cabGroup.add(handle);
   });
   group.add(cabGroup);
 
-  // Деревянный обеденный стол с фаской и ножками
-  // Координаты строго по ТЗ: стол располагается на y = -0.3, z = 1.2
+  // ── ОБЕДЕННЫЙ СТУЛ СО СПИНКОЙ (персонаж сидит на нем) ──
+  const chairGroup = new THREE.Group();
+  chairGroup.position.set(0, 0, 0.30);
+  const chairWoodMat = new THREE.MeshStandardMaterial({ color: 0x78350f, roughness: 0.45 });
+
+  // Сиденье стула на высоте y = 0.44
+  const chairSeat = new THREE.Mesh(new THREE.BoxGeometry(0.56, 0.04, 0.48), chairWoodMat);
+  chairSeat.position.y = 0.44;
+  chairSeat.castShadow = chairSeat.receiveShadow = true;
+  chairGroup.add(chairSeat);
+
+  // Мягкая подушечка на сиденье
+  const chairCushion = new THREE.Mesh(new THREE.BoxGeometry(0.50, 0.03, 0.44), new THREE.MeshStandardMaterial({ color: 0xfef3c7, roughness: 0.85 }));
+  chairCushion.position.y = 0.47;
+  chairCushion.castShadow = chairCushion.receiveShadow = true;
+  chairGroup.add(chairCushion);
+
+  // 4 ножки стула от y = 0 до y = 0.42
+  [[-0.24, -0.20], [0.24, -0.20], [-0.24, 0.20], [0.24, 0.20]].forEach(([cx, cz]) => {
+    const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.018, 0.44, 12), chairWoodMat);
+    leg.position.set(cx, 0.22, cz);
+    leg.castShadow = leg.receiveShadow = true;
+    chairGroup.add(leg);
+  });
+
+  // Спинка стула сзади персонажа (доходит до y = 0.92)
+  [[-0.24, -0.21], [0.24, -0.21]].forEach(([sx, sz]) => {
+    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.018, 0.48, 12), chairWoodMat);
+    pole.position.set(sx, 0.68, sz);
+    pole.castShadow = pole.receiveShadow = true;
+    chairGroup.add(pole);
+  });
+  const backRailTop = new THREE.Mesh(new THREE.BoxGeometry(0.54, 0.12, 0.04), chairWoodMat);
+  backRailTop.position.set(0, 0.86, -0.21);
+  backRailTop.castShadow = backRailTop.receiveShadow = true;
+  chairGroup.add(backRailTop);
+
+  const backRailMid = new THREE.Mesh(new THREE.BoxGeometry(0.48, 0.06, 0.03), chairWoodMat);
+  backRailMid.position.set(0, 0.68, -0.21);
+  backRailMid.castShadow = backRailMid.receiveShadow = true;
+  chairGroup.add(backRailMid);
+
+  group.add(chairGroup);
+
+  // ── ДЕРЕВЯННЫЙ ОБЕДЕННЫЙ СТОЛ (ОПУЩЕН ДО y = 0.65, НЕ ЗАКРЫВАЕТ ЛИЦО) ──
   const tableGroup = new THREE.Group();
-  tableGroup.position.set(0, -0.3, 1.2);
+  tableGroup.position.set(0, 0, 0.72);
 
   const tableTopMat = new THREE.MeshStandardMaterial({ color: 0xb45309, roughness: 0.45 });
-  const tableTop = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.08, 0.95), tableTopMat);
-  tableTop.position.y = 0.26;
+  // Столешница на высоте y = 0.65
+  const tableTop = new THREE.Mesh(new THREE.BoxGeometry(1.45, 0.05, 0.72), tableTopMat);
+  tableTop.position.y = 0.65;
   tableTop.castShadow = tableTop.receiveShadow = true;
   tableGroup.add(tableTop);
 
-  // Ножки стола
+  // Подстолье (царга)
+  const apron = new THREE.Mesh(new THREE.BoxGeometry(1.36, 0.04, 0.64), tableTopMat);
+  apron.position.y = 0.605;
+  apron.castShadow = apron.receiveShadow = true;
+  tableGroup.add(apron);
+
+  // Ножки стола от y = 0 до y = 0.625
   const legMat = new THREE.MeshStandardMaterial({ color: 0x78350f, roughness: 0.5 });
-  [[-0.75, -0.38], [0.75, -0.38], [-0.75, 0.38], [0.75, 0.38]].forEach(([lx, lz]) => {
-    const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.025, 0.56, 16), legMat);
-    leg.position.set(lx, -0.02, lz);
-    leg.castShadow = true;
+  [[-0.62, -0.27], [0.62, -0.27], [-0.62, 0.27], [0.62, 0.27]].forEach(([lx, lz]) => {
+    const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.025, 0.625, 16), legMat);
+    leg.position.set(lx, 0.3125, lz);
+    leg.castShadow = leg.receiveShadow = true;
     tableGroup.add(leg);
   });
 
   // Сервировочная салфетка / скатерть на столе
-  const clothMat = new THREE.MeshStandardMaterial({ color: 0xfef3c7, roughness: 0.85 });
-  const placemat = new THREE.Mesh(new THREE.BoxGeometry(0.75, 0.015, 0.65), clothMat);
-  placemat.position.set(0, 0.305, -0.08);
+  const clothMat = new THREE.MeshStandardMaterial({ color: 0xfef9c3, roughness: 0.85 });
+  const placemat = new THREE.Mesh(new THREE.BoxGeometry(0.60, 0.012, 0.42), clothMat);
+  placemat.position.set(0, 0.681, -0.04);
   placemat.receiveShadow = true;
   tableGroup.add(placemat);
 
   // Белая сервировочная тарелка ПЕРЕД персонажем
   const plateMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.2 });
-  const plate = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.20, 0.03, 24), plateMat);
-  plate.position.set(0, 0.325, -0.08);
-  plate.receiveShadow = true;
+  const plate = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.15, 0.024, 24), plateMat);
+  plate.position.set(0, 0.695, -0.04);
+  plate.castShadow = plate.receiveShadow = true;
   tableGroup.add(plate);
+
+  // Аппетитное пирожное с ягодкой на тарелке
+  const tartBase = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.05, 0.025, 16), new THREE.MeshStandardMaterial({ color: 0xd97706, roughness: 0.6 }));
+  tartBase.position.set(0, 0.715, -0.04);
+  tartBase.castShadow = true;
+  tableGroup.add(tartBase);
+
+  const tartCream = new THREE.Mesh(new THREE.SphereGeometry(0.042, 12, 12), new THREE.MeshStandardMaterial({ color: 0xfff1f2, roughness: 0.3 }));
+  tartCream.position.set(0, 0.74, -0.04);
+  tartCream.castShadow = true;
+  tableGroup.add(tartCream);
+
+  const tartBerry = new THREE.Mesh(new THREE.SphereGeometry(0.02, 10, 10), new THREE.MeshStandardMaterial({ color: 0xe11d48, roughness: 0.2 }));
+  tartBerry.position.set(0, 0.775, -0.04);
+  tartBerry.castShadow = true;
+  tableGroup.add(tartBerry);
 
   group.add(tableGroup);
 
@@ -997,67 +1095,80 @@ function buildBathroomRoom(ox) {
 
   // Белая акриловая ванна / поддон с бортиками и сливом
   const tubGroup = new THREE.Group();
-  tubGroup.position.set(0, baseY, 0);
+  tubGroup.position.set(0, 0, 0);
 
   const acrylicMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.1, metalness: 0.05 });
-  // Основание поддона
-  const tubBase = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.14, 1.5), acrylicMat);
-  tubBase.position.y = 0.07;
+  // Основание поддона (пол поддона на y = 0.02...0.04)
+  const tubBase = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.04, 1.5), acrylicMat);
+  tubBase.position.y = 0.02;
   tubBase.receiveShadow = true;
   tubGroup.add(tubBase);
 
   // Бортики ванны
-  const rimFront = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.22, 0.12), acrylicMat);
-  rimFront.position.set(0, 0.18, 0.69);
+  const rimFront = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.18, 0.10), acrylicMat);
+  rimFront.position.set(0, 0.11, 0.70);
+  rimFront.castShadow = rimFront.receiveShadow = true;
   tubGroup.add(rimFront);
-  const rimBack = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.22, 0.12), acrylicMat);
-  rimBack.position.set(0, 0.18, -0.69);
+
+  const rimBack = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.18, 0.10), acrylicMat);
+  rimBack.position.set(0, 0.11, -0.70);
+  rimBack.castShadow = rimBack.receiveShadow = true;
   tubGroup.add(rimBack);
-  const rimLeft = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.22, 1.3), acrylicMat);
-  rimLeft.position.set(-0.79, 0.18, 0);
+
+  const rimLeft = new THREE.Mesh(new THREE.BoxGeometry(0.10, 0.18, 1.3), acrylicMat);
+  rimLeft.position.set(-0.80, 0.11, 0);
+  rimLeft.castShadow = rimLeft.receiveShadow = true;
   tubGroup.add(rimLeft);
-  const rimRight = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.22, 1.3), acrylicMat);
-  rimRight.position.set(0.79, 0.18, 0);
+
+  const rimRight = new THREE.Mesh(new THREE.BoxGeometry(0.10, 0.18, 1.3), acrylicMat);
+  rimRight.position.set(0.80, 0.11, 0);
+  rimRight.castShadow = rimRight.receiveShadow = true;
   tubGroup.add(rimRight);
 
   // Хромированный слив в центре поддона
   const drainMat = new THREE.MeshStandardMaterial({ color: 0xcfd8dc, metalness: 0.95, roughness: 0.08 });
-  const drain = new THREE.Mesh(new THREE.CylinderGeometry(0.065, 0.065, 0.02, 16), drainMat);
-  drain.position.set(0, 0.142, 0);
+  const drain = new THREE.Mesh(new THREE.CylinderGeometry(0.065, 0.065, 0.015, 16), drainMat);
+  drain.position.set(0, 0.041, 0);
+  drain.receiveShadow = true;
   tubGroup.add(drain);
 
   group.add(tubGroup);
 
   // Металлическая хромированная стойка душа (metalness: 0.9, roughness: 0.1)
   const chromeMat = new THREE.MeshStandardMaterial({ color: 0xf1f5f9, roughness: 0.1, metalness: 0.9 });
-  const showerPipe = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.022, 2.0), chromeMat);
-  showerPipe.position.set(0.78, baseY + 1.6, -1.98);
+  const showerPipe = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.022, 2.45), chromeMat);
+  showerPipe.position.set(0.78, 1.225, -1.98);
+  showerPipe.castShadow = true;
   group.add(showerPipe);
 
   // Смеситель с ручками регулировки
   const mixer = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.08, 0.12), chromeMat);
-  mixer.position.set(0.78, baseY + 1.1, -1.94);
+  mixer.position.set(0.78, 1.05, -1.94);
+  mixer.castShadow = true;
   group.add(mixer);
 
   // Круглая верхняя лейка душа
   const showerArm = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.55), chromeMat);
-  showerArm.position.set(0.78, baseY + 2.45, -1.72);
+  showerArm.position.set(0.78, 2.45, -1.72);
   showerArm.rotation.x = Math.PI / 2;
+  showerArm.castShadow = true;
   group.add(showerArm);
 
   const showerHead = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.08, 0.04, 24), chromeMat);
-  showerHead.position.set(0.78, baseY + 2.43, -1.45);
+  showerHead.position.set(0.78, 2.43, -1.45);
   showerHead.rotation.x = 0.2;
+  showerHead.castShadow = true;
   group.add(showerHead);
 
   // Зеркало на стене с легким синим отражением
   const mirror = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 1.1), new THREE.MeshStandardMaterial({ color: 0xdbeafe, roughness: 0.05, metalness: 0.9 }));
-  mirror.position.set(-0.85, baseY + 1.8, -2.08);
+  mirror.position.set(-0.85, 1.8, -2.08);
+  mirror.receiveShadow = true;
   group.add(mirror);
 
   // Холодный чистый потолочный спот (5000K, f0f8ff)
   bathroomDiffusedLight = new THREE.PointLight(0xf0f8ff, 0.85, 6.5);
-  bathroomDiffusedLight.position.set(ox, baseY + 2.7, 0.2);
+  bathroomDiffusedLight.position.set(ox, 2.7, 0.2);
   bathroomDiffusedLight.castShadow = true;
   bathroomDiffusedLight.shadow.bias = -0.001;
   scene.add(bathroomDiffusedLight);
@@ -1092,68 +1203,75 @@ function buildBedroomRoom(ox) {
   // Плинтус
   const bb = new THREE.Mesh(new THREE.BoxGeometry(5.2, 0.12, 0.05), new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.35 }));
   bb.position.set(0, baseY + 0.06, -2.08);
+  bb.receiveShadow = true;
   group.add(bb);
 
-  // ── ПРОРАБОТАННАЯ КРОВАТЬ ──
+  // ── ПРОРАБОТАННАЯ КРОВАТЬ С МАТРАСОМ (y = 0.60) И ПОДУШКАМИ ──
   const bedGroup = new THREE.Group();
   bedGroup.position.set(0, 0, -0.35);
 
   // Каркас из темного дерева (BoxGeometry, rough=0.6)
   const woodFrameMat = new THREE.MeshStandardMaterial({ color: 0x271c19, roughness: 0.6 });
-  const bedBase = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.35, 2.2), woodFrameMat);
-  bedBase.position.y = baseY + 0.175;
+  const bedBase = new THREE.Mesh(new THREE.BoxGeometry(1.65, 0.35, 2.25), woodFrameMat);
+  bedBase.position.y = 0.175;
   bedBase.castShadow = bedBase.receiveShadow = true;
   bedGroup.add(bedBase);
 
   // Высокое деревянное изголовье кровати
-  const headboard = new THREE.Mesh(new THREE.BoxGeometry(1.64, 1.2, 0.12), woodFrameMat);
-  headboard.position.set(0, baseY + 0.6, -1.1);
+  const headboard = new THREE.Mesh(new THREE.BoxGeometry(1.68, 1.10, 0.12), woodFrameMat);
+  headboard.position.set(0, 0.70, -1.10);
   headboard.castShadow = headboard.receiveShadow = true;
   bedGroup.add(headboard);
 
-  // Толстый белый матрас (BoxGeometry, rough=0.9)
+  // Толстый белый матрас (верх матраса на y = 0.60)
   const mattressMat = new THREE.MeshStandardMaterial({ color: 0xfafaf9, roughness: 0.9 });
-  const mattress = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.28, 2.1), mattressMat);
-  mattress.position.y = baseY + 0.35 + 0.14; // y = -0.03
+  const mattress = new THREE.Mesh(new THREE.BoxGeometry(1.52, 0.25, 2.15), mattressMat);
+  mattress.position.y = 0.475; // y от 0.35 до 0.60
   mattress.castShadow = mattress.receiveShadow = true;
   bedGroup.add(mattress);
 
   // Две мягкие подушки у изголовья (BoxGeometry, rough=0.95)
   const pillowMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.95 });
   const pillow1 = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.14, 0.38), pillowMat);
-  pillow1.position.set(-0.36, baseY + 0.52, -0.8);
-  pillow1.castShadow = true;
+  pillow1.position.set(-0.36, 0.66, -0.80);
+  pillow1.castShadow = pillow1.receiveShadow = true;
   bedGroup.add(pillow1);
 
   const pillow2 = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.14, 0.38), pillowMat);
-  pillow2.position.set(0.36, baseY + 0.52, -0.8);
-  pillow2.castShadow = true;
+  pillow2.position.set(0.36, 0.66, -0.80);
+  pillow2.castShadow = pillow2.receiveShadow = true;
   bedGroup.add(pillow2);
 
   // Объемное одеяло поверх матраса (мягкий пастельно-розовый цвет, rough=0.85)
   const blanketMat = new THREE.MeshStandardMaterial({ color: 0xfbcfe8, roughness: 0.85 });
-  const blanket = new THREE.Mesh(new THREE.BoxGeometry(1.54, 0.10, 1.4), blanketMat);
-  blanket.position.set(0, baseY + 0.50, 0.1);
+  const blanket = new THREE.Mesh(new THREE.BoxGeometry(1.54, 0.10, 1.45), blanketMat);
+  blanket.position.set(0, 0.64, 0.15);
   blanket.castShadow = blanket.receiveShadow = true;
   bedGroup.add(blanket);
+
+  const blanketFlap = new THREE.Mesh(new THREE.BoxGeometry(1.54, 0.08, 0.22), new THREE.MeshStandardMaterial({ color: 0xf472b6, roughness: 0.8 }));
+  blanketFlap.position.set(0, 0.68, -0.52);
+  blanketFlap.castShadow = blanketFlap.receiveShadow = true;
+  bedGroup.add(blanketFlap);
 
   group.add(bedGroup);
 
   // ── ТУМБОЧКА И НАСТОЛЬНЫЙ СВЕТИЛЬНИК С АБАЖУРОМ ──
   const standMat = new THREE.MeshStandardMaterial({ color: 0x3b2416, roughness: 0.55 });
   const stand = new THREE.Mesh(new THREE.BoxGeometry(0.65, 0.56, 0.55), standMat);
-  stand.position.set(-1.2, baseY + 0.28, -1.0);
+  stand.position.set(-1.2, 0.28, -1.0);
   stand.castShadow = stand.receiveShadow = true;
   stand.userData = { isLamp: true };
   group.add(stand);
 
   // Светильник на тумбочке
   const lampGroup = new THREE.Group();
-  lampGroup.position.set(-1.2, baseY + 0.56, -1.0);
+  lampGroup.position.set(-1.2, 0.56, -1.0);
 
   const brassMat = new THREE.MeshStandardMaterial({ color: 0xd4af37, metalness: 0.85, roughness: 0.15 });
   const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.08, 0.28), brassMat);
   stem.position.y = 0.14;
+  stem.castShadow = true;
   lampGroup.add(stem);
 
   // Полупрозрачный абажур (CylinderGeometry)
@@ -1164,6 +1282,7 @@ function buildBedroomRoom(ox) {
   });
   bedroomShadeMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.24, 0.28, 24, 1, true), shadeMat);
   bedroomShadeMesh.position.y = 0.38;
+  bedroomShadeMesh.castShadow = true;
   bedroomShadeMesh.userData = { isLamp: true };
   lampGroup.add(bedroomShadeMesh);
 
@@ -1178,7 +1297,7 @@ function buildBedroomRoom(ox) {
 
   // ── ОКНО С ТЕМНОЙ ПЛОСКОСТЬЮ НОЧНОГО НЕБА И ЗВЕЗД ──
   const winGroup = new THREE.Group();
-  winGroup.position.set(1.0, baseY + 1.85, -2.05);
+  winGroup.position.set(1.0, 1.85, -2.05);
 
   const skyCanvas = document.createElement('canvas');
   skyCanvas.width = skyCanvas.height = 256;
@@ -1190,12 +1309,13 @@ function buildBedroomRoom(ox) {
 
   const frameMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.3 });
   const winFrame = new THREE.Mesh(new THREE.BoxGeometry(1.6, 1.8, 0.05), frameMat);
+  winFrame.castShadow = true;
   winGroup.add(winFrame);
   group.add(winGroup);
 
   // Слабый синий свет из окна (лунный свет)
   bedroomMoonLight = new THREE.PointLight(0x1e3a8a, 0.25, 6.0);
-  bedroomMoonLight.position.set(ox + 1.0, baseY + 1.9, -1.0);
+  bedroomMoonLight.position.set(ox + 1.0, 1.9, -1.0);
   scene.add(bedroomMoonLight);
 
   scene.add(group);
@@ -1448,42 +1568,42 @@ function applyRoomPose(roomName) {
   if (!charGroup) return;
 
   if (roomName === 'kitchen') {
-    // Кухня: сидит ЗА столом (y = 0.05, z = 0.2), локти лежат на уровне края стола
+    // Кухня: сидит на стуле ЗА столом (y = 0.12, z = 0.30), локти на уровне края стола
     gsap.to(charGroup.rotation, { x: 0, y: 0, z: 0, duration: 0.5 });
-    gsap.to(charGroup.position, { x: 14, y: 0.05, z: 0.2, duration: 0.6, ease: 'power2.out' });
+    gsap.to(charGroup.position, { x: 14, y: 0.12, z: 0.30, duration: 0.6, ease: 'power2.out' });
     if (bones.leftArm)      gsap.to(bones.leftArm.rotation,      { x: 0.70, y: -0.25, z: -0.45, duration: 0.6 });
     if (bones.rightArm)     gsap.to(bones.rightArm.rotation,     { x: 0.70, y: 0.25,  z: 0.45,  duration: 0.6 });
     if (bones.leftForeArm)  gsap.to(bones.leftForeArm.rotation,  { x: 0.55, y: -0.30, z: 0,     duration: 0.6 });
     if (bones.rightForeArm) gsap.to(bones.rightForeArm.rotation, { x: 0.55, y: 0.30,  z: 0,     duration: 0.6 });
   } else if (roomName === 'bedroom') {
     if (petState.isSleeping) {
-      // Спальня (СОН): персонаж лежит ГОРИЗОНТАЛЬНО на кровати, голова на подушке!
-      // НЕ прятать модель под пол!
+      // Спальня (СОН): персонаж лежит ГОРИЗОНТАЛЬНО на матрасе кровати (y = 0.64, z = -0.30), голова на подушке!
+      // Никакого скрывания под пол!
       gsap.to(charGroup.rotation, { x: -Math.PI / 2, y: 0, z: 0, duration: 0.7, ease: 'power2.inOut' });
-      gsap.to(charGroup.position, { x: 42, y: 0.14, z: -0.45, duration: 0.7, ease: 'power2.inOut' });
+      gsap.to(charGroup.position, { x: 42, y: 0.64, z: -0.30, duration: 0.7, ease: 'power2.inOut' });
       if (bones.head)        gsap.to(bones.head.rotation,        { x: 0.10, y: 0,     z: 0.18,  duration: 0.6 });
       if (bones.leftArm)     gsap.to(bones.leftArm.rotation,     { x: 0.35, y: -0.20, z: -0.60, duration: 0.6 });
       if (bones.rightArm)    gsap.to(bones.rightArm.rotation,    { x: 0.35, y: 0.20,  z: 0.60,  duration: 0.6 });
       if (bones.leftForeArm) gsap.to(bones.leftForeArm.rotation, { x: 0.20, y: 0,     z: 0,     duration: 0.6 });
       if (bones.rightForeArm)gsap.to(bones.rightForeArm.rotation,{ x: 0.20, y: 0,     z: 0,     duration: 0.6 });
     } else {
-      // Спальня при свете: сидит на краю кровати
+      // Спальня при свете: сидит на краю кровати (y = 0.25, z = 0.60)
       gsap.to(charGroup.rotation, { x: 0, y: 0, z: 0, duration: 0.6, ease: 'power2.inOut' });
-      gsap.to(charGroup.position, { x: 42, y: 0.05, z: 0.45, duration: 0.6, ease: 'power2.out' });
+      gsap.to(charGroup.position, { x: 42, y: 0.25, z: 0.60, duration: 0.6, ease: 'power2.out' });
       setNaturalPose(charGroup);
     }
   } else if (roomName === 'bathroom') {
-    // Ванная: стоит ровно в поддоне (y = baseY, z = 0), руки прижаты к бокам
+    // Ванная: стоит ровно в поддоне (y = 0.02, z = 0), руки прижаты к бокам
     gsap.to(charGroup.rotation, { x: 0, y: 0, z: 0, duration: 0.5 });
-    gsap.to(charGroup.position, { x: 28, y: baseY, z: 0, duration: 0.6, ease: 'power2.out' });
+    gsap.to(charGroup.position, { x: 28, y: 0.02, z: 0, duration: 0.6, ease: 'power2.out' });
     if (bones.leftArm)      gsap.to(bones.leftArm.rotation,      { x: 0.15, y: 0, z: -1.25, duration: 0.6 });
     if (bones.rightArm)     gsap.to(bones.rightArm.rotation,     { x: 0.15, y: 0, z: 1.25,  duration: 0.6 });
     if (bones.leftForeArm)  gsap.to(bones.leftForeArm.rotation,  { x: 0.25, y: 0, z: 0,     duration: 0.6 });
     if (bones.rightForeArm) gsap.to(bones.rightForeArm.rotation, { x: 0.25, y: 0, z: 0,     duration: 0.6 });
   } else {
-    // Гостиная: стоит в центре ковра, руки свободно опущены
+    // Гостиная: стоит в центре ковра (y = 0, z = 0), руки свободно опущены
     gsap.to(charGroup.rotation, { x: 0, y: 0, z: 0, duration: 0.5 });
-    gsap.to(charGroup.position, { x: 0, y: baseY, z: 0, duration: 0.6, ease: 'power2.out' });
+    gsap.to(charGroup.position, { x: 0, y: 0, z: 0, duration: 0.6, ease: 'power2.out' });
     setNaturalPose(charGroup);
   }
 }
@@ -1536,10 +1656,12 @@ function switchRoom(roomName) {
 
   // Персонаж перемещается в соответствующую комнату
   if (charGroup) {
+    const targetY = (roomName === 'bedroom' && petState.isSleeping) ? 0.64 : cfg.charPos.y;
+    const targetZ = (roomName === 'bedroom' && petState.isSleeping) ? -0.30 : cfg.charPos.z;
     gsap.to(charGroup.position, {
       x: cfg.charPos.x,
-      y: cfg.charPos.y,
-      z: cfg.charPos.z,
+      y: targetY,
+      z: targetZ,
       duration: 0.85, ease: 'power2.inOut',
       onComplete: () => applyRoomPose(roomName)
     });
@@ -1595,21 +1717,21 @@ function deactivateBathroomTools() {
 $('tool-sponge')?.addEventListener('click', () => activateTool('sponge'));
 $('tool-shower')?.addEventListener('click', () => activateTool('shower'));
 
-// Спавн скопления мелкой полупрозрачной пены (гроздьями по 3-5 пузырьков радиусом 0.04-0.08)
+// Спавн скопления мелкой полупрозрачной пены (гроздьями по 4-7 пузырьков радиусом 0.025-0.055)
 function spawnFoamCluster(point) {
-  if (!charGroup || foamBubbles.length >= 35) return;
+  if (!charGroup || foamBubbles.length >= 45) return;
   playSfx('soap');
   safeHaptic('light');
 
-  const count = 3 + Math.floor(Math.random() * 3); // 3-5 мелких пузырьков
+  const count = 4 + Math.floor(Math.random() * 4); // 4-7 мелких пузырьков в кластере
   for (let i = 0; i < count; i++) {
-    const radius = 0.038 + Math.random() * 0.035; // 0.038 - 0.073 (маленький размер)
+    const radius = 0.025 + Math.random() * 0.030; // 0.025 - 0.055 (нежный реалистичный размер)
     const geo = new THREE.SphereGeometry(radius, 12, 12);
     const bubble = new THREE.Mesh(geo, foamMaterial);
 
-    const jx = (Math.random() - 0.5) * 0.08;
-    const jy = (Math.random() - 0.5) * 0.08;
-    const jz = (Math.random() - 0.5) * 0.08;
+    const jx = (Math.random() - 0.5) * 0.05;
+    const jy = (Math.random() - 0.5) * 0.05;
+    const jz = (Math.random() - 0.5) * 0.05;
 
     // Привязываем пену локально к телу персонажа
     const localPos = charGroup.worldToLocal(point.clone()).add(new THREE.Vector3(jx, jy, jz));
@@ -1632,19 +1754,19 @@ function spawnFoamCluster(point) {
 
 // Система частиц падающих струй воды для душа
 function initWaterDropParticles(parent) {
-  const count = 80;
+  const count = 90;
   const geo = new THREE.BufferGeometry();
   const pos = new Float32Array(count * 3);
 
   waterDropsData = [];
   for (let i = 0; i < count; i++) {
-    const x = 0.78 + (Math.random() - 0.5) * 0.45;
-    const y = baseY + 2.3 + Math.random() * 0.3;
-    const z = -1.45 + (Math.random() - 0.5) * 0.45;
+    const x = 0.78 + (Math.random() - 0.5) * 0.40;
+    const y = 2.4 + Math.random() * 0.2;
+    const z = -1.45 + (Math.random() - 0.5) * 0.40;
     pos[i * 3]     = x;
     pos[i * 3 + 1] = y;
     pos[i * 3 + 2] = z;
-    waterDropsData.push({ x, y, z, speed: 0.09 + Math.random() * 0.06 });
+    waterDropsData.push({ x, y, z, speed: 0.08 + Math.random() * 0.05 });
   }
 
   geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
@@ -1751,7 +1873,7 @@ document.querySelectorAll('.btn-food').forEach(btn => {
         // Подпрыгивание и жевание
         if (charGroup) {
           gsap.to(charGroup.position, {
-            y: 0.05 + 0.08, duration: 0.15, yoyo: true, repeat: 1, ease: 'power2.out',
+            y: 0.12 + 0.06, duration: 0.15, yoyo: true, repeat: 1, ease: 'power2.out',
             onComplete: () => applyRoomPose('kitchen')
           });
         }
@@ -1982,18 +2104,18 @@ function animate() {
     if (!petState.isSleeping) {
       // 1. Плавное синусоидальное дыхание
       if (currentRoom === 'living') {
-        charGroup.position.y = baseY + Math.sin(time * 1.5) * 0.015;
+        charGroup.position.y = 0 + Math.sin(time * 1.5) * 0.015;
         // Мягкое покачивание рук в естественной позе
         if (bones.leftArm)  bones.leftArm.rotation.z  = -1.15 + Math.sin(time * 1.5 + 0.4) * 0.02;
         if (bones.rightArm) bones.rightArm.rotation.z =  1.15 - Math.sin(time * 1.5 + 0.4) * 0.02;
       } else if (currentRoom === 'bathroom') {
-        charGroup.position.y = baseY + Math.sin(time * 1.5) * 0.015;
+        charGroup.position.y = 0.02 + Math.sin(time * 1.5) * 0.012;
         if (bones.leftArm)  bones.leftArm.rotation.z  = -1.25 + Math.sin(time * 1.5 + 0.4) * 0.02;
         if (bones.rightArm) bones.rightArm.rotation.z =  1.25 - Math.sin(time * 1.5 + 0.4) * 0.02;
       } else if (currentRoom === 'kitchen') {
-        charGroup.position.y = 0.05 + Math.sin(time * 1.5) * 0.008;
+        charGroup.position.y = 0.12 + Math.sin(time * 1.5) * 0.008;
       } else if (currentRoom === 'bedroom') {
-        charGroup.position.y = 0.05 + Math.sin(time * 1.5) * 0.008;
+        charGroup.position.y = 0.25 + Math.sin(time * 1.5) * 0.008;
       }
 
       // 2. Голова мягко следит за пальцем/курсором
@@ -2019,9 +2141,21 @@ function animate() {
     } else {
       // Спящий режим: легкое размеренное дыхание лежа на кровати
       if (currentRoom === 'bedroom') {
-        charGroup.position.y = 0.14 + Math.sin(time * 1.0) * 0.005;
+        charGroup.position.y = 0.64 + Math.sin(time * 1.0) * 0.004;
       }
     }
+  }
+
+  // Обновление мягкой контактной тени под ногами
+  if (contactShadowMesh && charGroup) {
+    contactShadowMesh.position.x = charGroup.position.x;
+    contactShadowMesh.position.z = charGroup.position.z;
+    if (currentRoom === 'bathroom') {
+      contactShadowMesh.position.y = 0.042;
+    } else {
+      contactShadowMesh.position.y = 0.003;
+    }
+    contactShadowMesh.visible = !petState.isSleeping;
   }
 
   // Анимация струй воды в ванной
@@ -2029,8 +2163,8 @@ function animate() {
     const pos = waterParticlesMesh.geometry.attributes.position.array;
     for (let i = 0; i < waterDropsData.length; i++) {
       waterDropsData[i].y -= waterDropsData[i].speed;
-      if (waterDropsData[i].y < baseY + 0.1) {
-        waterDropsData[i].y = baseY + 2.3;
+      if (waterDropsData[i].y < 0.05) {
+        waterDropsData[i].y = 2.4;
       }
       pos[i * 3 + 1] = waterDropsData[i].y;
     }

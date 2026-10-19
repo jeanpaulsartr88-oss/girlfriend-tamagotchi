@@ -43,3 +43,6 @@ Thumbs.db
 
 # Logs
 *.log
+
+# 3D Backups
+static/models/*_orig.glb
