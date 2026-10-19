@@ -671,9 +671,19 @@ const baseScale = 1.35;
 // Источники света Three.js
 let ambientLight, dirLight, lampPointLight;
 
-// Кости модели
-const bones = { head: null, neck: null, spine: null, jaw: null };
-const initialBoneRots = { head: new THREE.Euler(), neck: new THREE.Euler(), spine: new THREE.Euler(), jaw: new THREE.Euler() };
+// Кости модели (полная Mixamo разметка)
+const bones = {
+  head: null, neck: null, spine: null, chest: null,
+  leftShoulder: null, rightShoulder: null,
+  leftArm: null, rightArm: null,
+  leftForeArm: null, rightForeArm: null,
+  jaw: null
+};
+const initialBoneRots = {};
+
+// Переменные анимации
+let smoothedVolume = 0;
+let isBlinking = false;
 
 // Трекинг курсора / пальца
 let pointer = { x: 0, y: 0 };
@@ -690,7 +700,7 @@ function initThreeScene() {
   const H = wrap.clientHeight || window.innerHeight * 0.6;
 
   scene = new THREE.Scene();
-  scene.background = new THREE.Color(0xfce7f3);
+  scene.background = new THREE.Color(0xf5d0dc); // Тёплый пастельный фон без белого пересвета
   clock = new THREE.Clock();
 
   camera = new THREE.PerspectiveCamera(38, W / H, 0.1, 100);
@@ -700,43 +710,47 @@ function initThreeScene() {
   renderer.setSize(W, H);
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 
-  // 1. Цветокоррекция и экспозиция (устранение пересвета и эффекта белого мыла)
+  // 1. Цветокоррекция и экспозиция: ACESFilmicToneMapping + exposure 0.8
   if (THREE.SRGBColorSpace) {
     renderer.outputColorSpace = THREE.SRGBColorSpace;
   } else {
     renderer.outputEncoding = THREE.sRGBEncoding;
   }
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 0.95;
+  renderer.toneMappingExposure = 0.8; // Глубокие естественные кино-тона без выжженного белого
 
-  // Мягкие реалистичные тени
+  // Мягкие тени высокого разрешения
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   wrap.appendChild(renderer.domElement);
 
-  // 2. Сбалансированное освещение
-  // Рассеянный теплый свет умеренной интенсивности
-  ambientLight = new THREE.AmbientLight(0xfff3e0, 0.45);
+  // 2. Кинематографичная схема освещения (без мыла)
+  // AmbientLight: снижен до 0.15 (только подсветка глубоких теней), тёплый оттенок
+  ambientLight = new THREE.AmbientLight(0xfff6e9, 0.15);
   scene.add(ambientLight);
 
-  // Основной свет с мягкими тенями
+  // DirectionalLight (Солнце): 0.75, угол 45° сверху (2.0, 4.0, 2.0), shadow map 2048, bias -0.001
   dirLight = new THREE.DirectionalLight(0xfff8ee, 0.75);
-  dirLight.position.set(2.0, 3.8, 2.5);
+  dirLight.position.set(2.0, 4.0, 2.0);
   dirLight.castShadow = true;
-  dirLight.shadow.mapSize.width = 1024;
-  dirLight.shadow.mapSize.height = 1024;
-  dirLight.shadow.bias = -0.0005;
+  dirLight.shadow.mapSize.width = 2048;
+  dirLight.shadow.mapSize.height = 2048;
+  dirLight.shadow.bias = -0.001;
   dirLight.shadow.camera.near = 0.5;
   dirLight.shadow.camera.far = 10.0;
-  dirLight.shadow.camera.left = -2.5;
-  dirLight.shadow.camera.right = 2.5;
+  dirLight.shadow.camera.left = -2.0;
+  dirLight.shadow.camera.right = 2.0;
   dirLight.shadow.camera.top = 2.5;
-  dirLight.shadow.camera.bottom = -2.5;
+  dirLight.shadow.camera.bottom = -1.5;
   scene.add(dirLight);
 
-  // Мягкий контурный контровой свет (Rim Light) сзади модели синеватого оттенка (объем и отделение от фона)
-  const rimLight = new THREE.PointLight(0x90caf9, 0.4, 6.0);
-  rimLight.position.set(0, baseY + 1.2, -1.0);
+  // HemisphereLight: естественный купол неба и пола (0.25)
+  const hemiLight = new THREE.HemisphereLight(0xfff8f0, 0x5a5040, 0.25);
+  scene.add(hemiLight);
+
+  // PointLight (Контурный Rim Light): прохладный синеватый 0xd2e8ff, 0.45 для четкого отделения от фона
+  const rimLight = new THREE.PointLight(0xd2e8ff, 0.45, 6.0);
+  rimLight.position.set(-1.2, baseY + 1.4, -1.0);
   scene.add(rimLight);
 
   // 2. Строим процедурную 3D-комнату
@@ -1043,31 +1057,71 @@ function loadCharacterModel() {
       charGroup = new THREE.Group();
       const model = gltf.scene;
 
-      // Обход костей скиннинга и мешей
+      // Обход скиннинга и принудительная замена материалов на MeshStandardMaterial
       model.traverse((child) => {
         if (child.isMesh) {
+          const oldMat = child.material;
+          const isSkinned = !!child.isSkinnedMesh;
+          child.material = new THREE.MeshStandardMaterial({
+            map: oldMat ? oldMat.map : null,
+            roughness: 0.7,
+            metalness: 0.1,
+            skinning: isSkinned
+          });
+          if (oldMat && oldMat.color) {
+            child.material.color.copy(oldMat.color);
+          }
+          child.material.needsUpdate = true;
           child.castShadow = true;
           child.receiveShadow = true;
-          if (child.material) {
-            child.material.roughness = 0.62;
-            child.material.metalness = 0.04;
-          }
         }
         if (child.isBone) {
-          const name = child.name.toLowerCase();
-          if (name.includes('head') && !name.includes('top') && !bones.head) bones.head = child;
-          else if (name.includes('neck') && !bones.neck) bones.neck = child;
-          else if (name.includes('spine') && !bones.spine) bones.spine = child;
-          else if ((name.includes('jaw') || name.includes('mouth') || name.includes('chin')) && !bones.jaw) {
-            bones.jaw = child;
-          }
+          const name = child.name;
+          if (/leftarm$/i.test(name) || /arm_l$/i.test(name) || name === 'mixamorig:LeftArm') bones.leftArm = child;
+          else if (/rightarm$/i.test(name) || /arm_r$/i.test(name) || name === 'mixamorig:RightArm') bones.rightArm = child;
+          else if (/leftforearm$/i.test(name) || /forearm_l$/i.test(name) || name === 'mixamorig:LeftForeArm') bones.leftForeArm = child;
+          else if (/rightforearm$/i.test(name) || /forearm_r$/i.test(name) || name === 'mixamorig:RightForeArm') bones.rightForeArm = child;
+          else if (/leftshoulder$/i.test(name) || name === 'mixamorig:LeftShoulder') bones.leftShoulder = child;
+          else if (/rightshoulder$/i.test(name) || name === 'mixamorig:RightShoulder') bones.rightShoulder = child;
+          else if (/head$/i.test(name) && !/top/i.test(name)) bones.head = child;
+          else if (/neck$/i.test(name)) bones.neck = child;
+          else if (/spine2$/i.test(name)) bones.chest = child;
+          else if (/spine/i.test(name) && !bones.spine) bones.spine = child;
+          else if (/jaw|mouth|chin/i.test(name) && !bones.jaw) bones.jaw = child;
         }
       });
 
-      if (bones.head)  initialBoneRots.head.copy(bones.head.rotation);
-      if (bones.neck)  initialBoneRots.neck.copy(bones.neck.rotation);
-      if (bones.spine) initialBoneRots.spine.copy(bones.spine.rotation);
-      if (bones.jaw)   initialBoneRots.jaw.copy(bones.jaw.rotation);
+      // Сохраняем исходные углы костей
+      for (let k in bones) {
+        if (bones[k]) initialBoneRots[k] = bones[k].rotation.clone();
+      }
+
+      // ── Приведение в естественную позу (полный отказ от T-позы) ──
+      // Руки опущены вниз вдоль корпуса, с легким изгибом в локтях
+      if (bones.leftArm) {
+        bones.leftArm.rotation.set(0.18, -0.15, -1.22);
+        initialBoneRots.leftArm = bones.leftArm.rotation.clone();
+      }
+      if (bones.rightArm) {
+        bones.rightArm.rotation.set(0.18, 0.15, 1.22);
+        initialBoneRots.rightArm = bones.rightArm.rotation.clone();
+      }
+      if (bones.leftForeArm) {
+        bones.leftForeArm.rotation.set(0.12, -0.3, -0.15);
+        initialBoneRots.leftForeArm = bones.leftForeArm.rotation.clone();
+      }
+      if (bones.rightForeArm) {
+        bones.rightForeArm.rotation.set(0.12, 0.3, 0.15);
+        initialBoneRots.rightForeArm = bones.rightForeArm.rotation.clone();
+      }
+      if (bones.leftShoulder) {
+        bones.leftShoulder.rotation.z -= 0.05;
+        initialBoneRots.leftShoulder = bones.leftShoulder.rotation.clone();
+      }
+      if (bones.rightShoulder) {
+        bones.rightShoulder.rotation.z += 0.05;
+        initialBoneRots.rightShoulder = bones.rightShoulder.rotation.clone();
+      }
 
       // Центрирование модели
       const box = new THREE.Box3().setFromObject(model);
@@ -1146,6 +1200,7 @@ function triggerSquashAndStretch() {
   if (!charGroup) return;
   safeHaptic('medium');
   playSfx('tap');
+  playVoiceClip('giggle');
 
   gsap.killTweensOf(charGroup.scale);
   gsap.to(charGroup.scale, {
@@ -1178,57 +1233,69 @@ function animate() {
   pointer.x = THREE.MathUtils.lerp(pointer.x, targetPointer.x, 0.08);
   pointer.y = THREE.MathUtils.lerp(pointer.y, targetPointer.y, 0.08);
 
-  // ── Lip-Sync: замер громкости во время проигрывания аудио ──
-  let speechVol = 0;
+  // ── Сглаженный Lip-Sync (Отказ от "дребезга" рта через LERP 0.15) ──
+  let targetVolume = 0;
   if (isSpeaking && playbackAnalyser) {
     const fData = new Uint8Array(playbackAnalyser.frequencyBinCount);
     playbackAnalyser.getByteFrequencyData(fData);
     let fSum = 0;
     for (let i = 0; i < fData.length; i++) fSum += fData[i];
     const avg = fSum / fData.length;
-    speechVol = Math.min(1.0, avg / 60.0);
+    targetVolume = Math.min(1.0, avg / 55.0);
   }
-  lipSyncVolume = THREE.MathUtils.lerp(lipSyncVolume, speechVol, 0.35);
+  smoothedVolume += (targetVolume - smoothedVolume) * 0.15;
 
   if (charGroup) {
     if (!petState.isSleeping) {
-      // Процедурный Idle дыхания:
-      charGroup.position.y = baseY + Math.sin(time * 2.0) * 0.03;
-      charGroup.rotation.z = Math.sin(time * 1.0) * 0.015;
+      // 1. Дыхание: плавное покачивание по синусоиде (time * 1.5) * 0.02
+      charGroup.position.y = baseY + Math.sin(time * 1.5) * 0.02;
 
-      if (bones.spine) {
-        bones.spine.rotation.x = initialBoneRots.spine.x + Math.sin(time * 2.0) * 0.02;
+      // 2. Движение плеч и рук: медленные несинхронные микро-повороты по осям
+      if (bones.leftArm && initialBoneRots.leftArm) {
+        bones.leftArm.rotation.z = initialBoneRots.leftArm.z + Math.sin(time * 1.5 + 0.4) * 0.025;
+        bones.leftArm.rotation.x = initialBoneRots.leftArm.x + Math.cos(time * 1.2) * 0.018;
+      }
+      if (bones.rightArm && initialBoneRots.rightArm) {
+        bones.rightArm.rotation.z = initialBoneRots.rightArm.z - Math.sin(time * 1.5 + 0.4) * 0.025;
+        bones.rightArm.rotation.x = initialBoneRots.rightArm.x + Math.cos(time * 1.3) * 0.018;
+      }
+      if (bones.leftForeArm && initialBoneRots.leftForeArm) {
+        bones.leftForeArm.rotation.y = initialBoneRots.leftForeArm.y + Math.sin(time * 1.5) * 0.015;
+      }
+      if (bones.rightForeArm && initialBoneRots.rightForeArm) {
+        bones.rightForeArm.rotation.y = initialBoneRots.rightForeArm.y - Math.sin(time * 1.5) * 0.015;
+      }
+      if (bones.spine && initialBoneRots.spine) {
+        bones.spine.rotation.x = initialBoneRots.spine.x + Math.sin(time * 1.5) * 0.012;
+      }
+      if (bones.chest && initialBoneRots.chest) {
+        bones.chest.rotation.x = initialBoneRots.chest.x + Math.sin(time * 1.5 + 0.2) * 0.015;
       }
 
-      // Голова и шея смотрят за пальцем
-      if (bones.head) {
-        const targetHeadY = initialBoneRots.head.y + (pointer.x * 0.55);
-        const targetHeadX = initialBoneRots.head.x - (pointer.y * 0.35);
-        bones.head.rotation.y = THREE.MathUtils.lerp(bones.head.rotation.y, targetHeadY, 0.09);
-        bones.head.rotation.x = THREE.MathUtils.lerp(bones.head.rotation.x, targetHeadX, 0.09);
+      // 3. Голова и шея: живое слежение за пальцем/курсором с мягким покачиванием
+      if (bones.head && initialBoneRots.head) {
+        const targetHeadY = initialBoneRots.head.y + (pointer.x * 0.45);
+        const targetHeadX = initialBoneRots.head.x - (pointer.y * 0.25) + Math.sin(time * 0.8) * 0.012;
+        bones.head.rotation.y = THREE.MathUtils.lerp(bones.head.rotation.y, targetHeadY, 0.08);
+        bones.head.rotation.x = THREE.MathUtils.lerp(bones.head.rotation.x, targetHeadX, 0.08);
       }
-      if (bones.neck) {
-        const targetNeckY = initialBoneRots.neck.y + (pointer.x * 0.25);
-        bones.neck.rotation.y = THREE.MathUtils.lerp(bones.neck.rotation.y, targetNeckY, 0.09);
+      if (bones.neck && initialBoneRots.neck) {
+        const targetNeckY = initialBoneRots.neck.y + (pointer.x * 0.2);
+        bones.neck.rotation.y = THREE.MathUtils.lerp(bones.neck.rotation.y, targetNeckY, 0.08);
       }
 
-      // ── Lip-Sync: анимация рта и челюсти ──
-      if (bones.jaw) {
-        // Поворот кости челюсти вокруг оси X пропорционально громкости
-        bones.jaw.rotation.x = initialBoneRots.jaw.x + (lipSyncVolume * 0.45);
-      } else if (isSpeaking && lipSyncVolume > 0.04) {
-        // Эмуляция открывания рта и артикуляции через легкое вертикальное сжатие головы и покачивание
-        if (bones.head) {
-          bones.head.scale.y = 1.0 - lipSyncVolume * 0.09;
-          bones.head.scale.x = 1.0 + lipSyncVolume * 0.05;
-          bones.head.rotation.x = initialBoneRots.head.x + lipSyncVolume * 0.16;
+      // 4. Сглаженная анимация рта и челюсти (строго на основе smoothedVolume)
+      if (bones.jaw && initialBoneRots.jaw) {
+        bones.jaw.rotation.x = initialBoneRots.jaw.x + (smoothedVolume * 0.45);
+      } else if (isSpeaking && smoothedVolume > 0.02) {
+        if (bones.head && !isBlinking) {
+          bones.head.scale.y = 1.0 - smoothedVolume * 0.08;
+          bones.head.scale.x = 1.0 + smoothedVolume * 0.04;
+          const baseHeadX = initialBoneRots.head ? initialBoneRots.head.x : 0;
+          bones.head.rotation.x = baseHeadX + smoothedVolume * 0.18;
         }
-        charGroup.position.y = baseY + Math.sin(time * 16.0) * (lipSyncVolume * 0.025);
-        charGroup.scale.y = baseScale * (1.0 - lipSyncVolume * 0.035);
-        charGroup.scale.x = baseScale * (1.0 + lipSyncVolume * 0.02);
-      } else if (!isSpeaking && bones.head && bones.head.scale.y !== 1.0) {
+      } else if (!isSpeaking && !isBlinking && bones.head) {
         bones.head.scale.set(1, 1, 1);
-        charGroup.scale.set(baseScale, baseScale, baseScale);
       }
     } else {
       // Спящий режим: опущенная голова, медленное спокойное дыхание
@@ -1252,6 +1319,29 @@ function onResize() {
   camera.updateProjectionMatrix();
   renderer.setSize(W, H);
 }
+
+// Процедурное моргание: раз в 4-6 секунд сжимает глаза/голову по Y на 0.15 сек
+function triggerBlink() {
+  if (isBlinking || !bones.head || petState.isSleeping) return;
+  isBlinking = true;
+  gsap.to(bones.head.scale, {
+    y: 0.92,
+    duration: 0.075,
+    yoyo: true,
+    repeat: 1,
+    ease: 'power1.inOut',
+    onComplete: () => {
+      if (bones.head && !isSpeaking) bones.head.scale.y = 1.0;
+      isBlinking = false;
+    }
+  });
+}
+
+setInterval(() => {
+  if (!petState.isSleeping && Math.random() > 0.15) {
+    triggerBlink();
+  }
+}, 4500);
 
 // ─── F. КИНЕМАТОГРАФИЧНОЕ ПЕРЕКЛЮЧЕНИЕ КОМНАТ (КАМЕРА GSAP) ──────────────────
 let currentRoom = 'kitchen';
@@ -1357,6 +1447,7 @@ document.querySelectorAll('.btn-food').forEach(btn => {
         flyingFood.remove();
 
         // Подпрыгивание и жевание
+        playVoiceClip('eat');
         if (charGroup) {
           gsap.to(charGroup.position, {
             y: baseY + 0.22, duration: 0.16, yoyo: true, repeat: 1, ease: 'power2.out'
@@ -1433,6 +1524,7 @@ wrap.addEventListener('touchmove', onSoapMove, { passive: true });
 $('btn-shower')?.addEventListener('click', () => {
   safeHaptic('heavy');
   playSfx('shower');
+  playVoiceClip('sigh');
   updateSpeech('Освежающий душ! Все пузырьки смыты! 🚿✨');
 
   // Струи воды
@@ -1479,9 +1571,10 @@ function toggleBedroomLights() {
   saveState();
 
   if (petState.isSleeping) {
+    playVoiceClip('yawn');
     // При выключении света: Three.js свет приглушается, в окне загорается луна
     if (dirLight)       gsap.to(dirLight,       { intensity: 0.05, duration: 1.0 });
-    if (ambientLight)   gsap.to(ambientLight,   { intensity: 0.08, duration: 1.0 });
+    if (ambientLight)   gsap.to(ambientLight,   { intensity: 0.04, duration: 1.0 });
     if (lampPointLight) gsap.to(lampPointLight, { intensity: 0.15, duration: 1.0 });
 
     if (windowBackdropMesh?.material?.map?.image) {
@@ -1494,9 +1587,9 @@ function toggleBedroomLights() {
     updateSpeech('Сладких снов... Мне снишься ты 💤🌙');
     startSleepZ();
   } else {
-    // Включение света
-    if (dirLight)       gsap.to(dirLight,       { intensity: 1.25, duration: 0.8 });
-    if (ambientLight)   gsap.to(ambientLight,   { intensity: 0.95, duration: 0.8 });
+    // Включение света: восстанавливаем сбалансированный кинематографичный свет
+    if (dirLight)       gsap.to(dirLight,       { intensity: 0.75, duration: 0.8 });
+    if (ambientLight)   gsap.to(ambientLight,   { intensity: 0.15, duration: 0.8 });
     if (lampPointLight) gsap.to(lampPointLight, { intensity: 1.1,  duration: 0.8 });
 
     if (windowBackdropMesh?.material?.map?.image) {
@@ -1654,12 +1747,26 @@ async function toggleVoiceRepeater() {
 
       micSourceNode = voiceAudioCtx.createMediaStreamSource(micMediaStream);
 
-      // Analyser для VAD
+      // Полосовой фильтр входного сигнала с микрофона (отсекает всё ниже 150 Гц и выше 8000 Гц)
+      const micHp = voiceAudioCtx.createBiquadFilter();
+      micHp.type = 'highpass';
+      micHp.frequency.value = 150;
+      micHp.Q.value = 0.707;
+
+      const micLp = voiceAudioCtx.createBiquadFilter();
+      micLp.type = 'lowpass';
+      micLp.frequency.value = 8000;
+      micLp.Q.value = 0.707;
+
+      micSourceNode.connect(micHp);
+      micHp.connect(micLp);
+
+      // Analyser для VAD (детектор активности речи)
       vadAnalyserNode = voiceAudioCtx.createAnalyser();
       vadAnalyserNode.fftSize = 512;
-      micSourceNode.connect(vadAnalyserNode);
+      micLp.connect(vadAnalyserNode);
 
-      // ScriptProcessor для захвата PCM аудио
+      // ScriptProcessor для захвата чистого PCM аудио
       voiceScriptNode = voiceAudioCtx.createScriptProcessor(2048, 1, 1);
 
       voiceScriptNode.onaudioprocess = (e) => {
@@ -1707,7 +1814,7 @@ async function toggleVoiceRepeater() {
       const silentGain = voiceAudioCtx.createGain();
       silentGain.gain.value = 0;
 
-      micSourceNode.connect(voiceScriptNode);
+      micLp.connect(voiceScriptNode);
       voiceScriptNode.connect(silentGain);
       silentGain.connect(voiceAudioCtx.destination);
     }
@@ -1747,33 +1854,33 @@ function playProcessedVoicePhrase() {
   const buffer = voiceAudioCtx.createBuffer(1, totalLength, voiceAudioCtx.sampleRate);
   buffer.copyToChannel(merged, 0);
 
-  // 1. Источник звука + Pitch Shift (+5..+6 полутонов, коэффициент ~1.35)
+  // 1. Источник звука + качественный Pitch Shift (+5 полутонов: 2^(5/12) ~= 1.3348)
   const source = voiceAudioCtx.createBufferSource();
   source.buffer = buffer;
-  source.playbackRate.value = 1.35;
+  source.playbackRate.value = 1.3348;
 
-  // 2. Формантный фильтр F1 (Объём и теплота): peaking, freq=609.4, Q=2.2, gain=+3.5 dB
+  // 2. Формантный фильтр F1 (Грудной тембр и теплота): peaking, 609.4 Гц, Q=2.5, gain=+4.0 dB
   const f1 = voiceAudioCtx.createBiquadFilter();
   f1.type = 'peaking';
   f1.frequency.value = TARGET_F1;
-  f1.Q.value = 2.2;
-  f1.gain.value = 3.5;
+  f1.Q.value = 2.5;
+  f1.gain.value = 4.0;
 
-  // 3. Формантный фильтр F2 (Артикуляция): peaking, freq=1890.3, Q=2.5, gain=+4.0 dB
+  // 3. Формантный фильтр F2 (Артикуляция): peaking, 1890.3 Гц, Q=2.5, gain=+4.5 dB
   const f2 = voiceAudioCtx.createBiquadFilter();
   f2.type = 'peaking';
   f2.frequency.value = TARGET_F2;
   f2.Q.value = 2.5;
-  f2.gain.value = 4.0;
+  f2.gain.value = 4.5;
 
-  // 4. Формантный фильтр F3 (Тембр и звонкость): peaking, freq=3020.0, Q=3.0, gain=+3.0 dB
+  // 4. Формантный фильтр F3 (Звонкость и ясность): peaking, 3020.0 Гц, Q=2.5, gain=+3.5 dB
   const f3 = voiceAudioCtx.createBiquadFilter();
   f3.type = 'peaking';
   f3.frequency.value = TARGET_F3;
-  f3.Q.value = 3.0;
-  f3.gain.value = 3.0;
+  f3.Q.value = 2.5;
+  f3.gain.value = 3.5;
 
-  // 5. Динамический компрессор (threshold=-24, knee=30, ratio=8, attack=0.003, release=0.25)
+  // 5. Динамический компрессор для плотного теплого мультяшного звучания
   const comp = voiceAudioCtx.createDynamicsCompressor();
   comp.threshold.value = -24;
   comp.knee.value = 30;
@@ -1829,6 +1936,26 @@ function playProcessedVoicePhrase() {
 }
 
 $('btn-mic')?.addEventListener('click', toggleVoiceRepeater);
+
+// ─── Банк интерактивных голосовых реакций (/static/voice/) ──────────────────
+const VOICE_BANK = {
+  giggle: '/static/voice/giggle.wav',
+  yawn:   '/static/voice/yawn.wav',
+  eat:    '/static/voice/eat.wav',
+  sigh:   '/static/voice/sigh.wav',
+  kiss:   '/static/voice/kiss.wav'
+};
+
+function playVoiceClip(name) {
+  if (!isSoundOn) return;
+  const path = VOICE_BANK[name];
+  if (!path) return;
+  try {
+    const snd = new Audio(path);
+    snd.volume = 0.85;
+    snd.play().catch(() => {});
+  } catch(_) {}
+}
 
 // ─── K. ВСТРОЕННАЯ АРКАДНАЯ МИНИ-ИГРА «ЛОВЕЦ СЧАСТЬЯ» ────────────────────────
 const arcadeModal = $('arcade-modal');
@@ -2080,6 +2207,7 @@ setInterval(pollReactions, 5000);
 function showGiftCelebration(gift) {
   safeHaptic('heavy');
   playSfx('fanfare');
+  playVoiceClip('kiss');
 
   petState.hunger  = 100;
   petState.energy  = 100;
