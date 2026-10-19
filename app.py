@@ -385,6 +385,11 @@ def action():
             s.coins = (s.coins or 0) + 3
             msg = "Лёля весело хихикает! 🎮🥰"
 
+        elif act in ("talk", "voice", "repeat"):
+            s.fun = min(100.0, s.fun + 10.0)
+            s.coins = (s.coins or 0) + 2
+            msg = "Лёля весело повторила твой голос! 🎙️✨"
+
         elif act == "minigame":
             coins_earned = max(0, int(data.get("coins", 10)))
             s.coins = (s.coins or 0) + coins_earned

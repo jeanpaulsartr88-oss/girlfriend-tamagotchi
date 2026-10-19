@@ -150,16 +150,22 @@
 <header class="w-full max-w-md mx-auto px-3 pt-2 z-30 flex-shrink-0" style="padding-top:calc(var(--sat) + 8px)">
   <div class="flex items-center justify-between px-1 gap-1.5">
     <!-- Баланс монеток с кнопкой магазина -->
-    <button id="btn-open-shop" type="button" class="flex items-center gap-1.5 glass px-3 py-1.5 rounded-full shadow-sm active:scale-95 transition-transform">
-      <span class="text-base">🪙</span>
+    <button id="btn-open-shop" type="button" class="flex items-center gap-1 glass px-2.5 py-1.5 rounded-full shadow-sm active:scale-95 transition-transform">
+      <span class="text-sm">🪙</span>
       <span id="hud-coins" class="text-xs font-black text-amber-700">100</span>
-      <span class="text-[10px] bg-amber-400 text-amber-950 font-black rounded-full px-1.5 py-0.2">+</span>
+      <span class="text-[10px] bg-amber-400 text-amber-950 font-black rounded-full px-1 py-0.2">+</span>
+    </button>
+
+    <!-- Кнопка «Повторялка голоса» (Talking Tom Mic) -->
+    <button id="btn-mic" type="button" class="glass px-2.5 py-1.5 rounded-full text-[11px] font-black text-purple-700 border border-purple-300 active:scale-95 transition-all flex items-center gap-1 shadow-sm hover:bg-purple-50">
+      <span id="mic-icon" class="text-sm">🎙️</span>
+      <span id="mic-text">Голос</span>
     </button>
 
     <!-- Кнопка «Симулировать ❤️ от парня» -->
-    <button id="btn-quick-sim" type="button" class="glass px-3 py-1.5 rounded-full text-[11px] font-extrabold text-pink-600 border border-pink-300 active:scale-95 transition-transform flex items-center gap-1.5 shadow-sm hover:bg-pink-50">
+    <button id="btn-quick-sim" type="button" class="glass px-2.5 py-1.5 rounded-full text-[11px] font-extrabold text-pink-600 border border-pink-300 active:scale-95 transition-transform flex items-center gap-1 shadow-sm hover:bg-pink-50">
       <span class="text-sm">❤️</span>
-      <span>Симулировать ❤️ от парня</span>
+      <span>Парень</span>
     </button>
 
     <!-- Звук -->
@@ -176,6 +182,12 @@
     <div id="speech" class="bubble relative max-w-[90%] bg-white/95 backdrop-blur-md border border-pink-200/90 px-4 py-2 rounded-2xl shadow-md text-xs font-bold text-gray-700 text-center leading-snug">
       Мур! Я так рада тебя видеть! 🌸✨
     </div>
+  </div>
+
+  <!-- Плашка статуса распознавания голоса / повторения (Talking Tom Voice Status) -->
+  <div id="voice-status" class="absolute top-14 left-1/2 -translate-x-1/2 z-30 hidden items-center gap-2 px-3.5 py-1.5 rounded-full shadow-lg text-xs font-black backdrop-blur-md transition-all pointer-events-none">
+    <span id="voice-pulse" class="w-2.5 h-2.5 rounded-full"></span>
+    <span id="voice-status-text">Слушаю... 👂🎙️</span>
   </div>
 
   <!-- Three.js Canvas Container -->
@@ -660,8 +672,8 @@ const baseScale = 1.35;
 let ambientLight, dirLight, lampPointLight;
 
 // Кости модели
-const bones = { head: null, neck: null, spine: null };
-const initialBoneRots = { head: new THREE.Euler(), neck: new THREE.Euler(), spine: new THREE.Euler() };
+const bones = { head: null, neck: null, spine: null, jaw: null };
+const initialBoneRots = { head: new THREE.Euler(), neck: new THREE.Euler(), spine: new THREE.Euler(), jaw: new THREE.Euler() };
 
 // Трекинг курсора / пальца
 let pointer = { x: 0, y: 0 };
@@ -687,24 +699,44 @@ function initThreeScene() {
   renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: 'high-performance' });
   renderer.setSize(W, H);
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+
+  // 1. Цветокоррекция и экспозиция (устранение пересвета и эффекта белого мыла)
+  if (THREE.SRGBColorSpace) {
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+  } else {
+    renderer.outputEncoding = THREE.sRGBEncoding;
+  }
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 0.95;
+
+  // Мягкие реалистичные тени
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   wrap.appendChild(renderer.domElement);
 
-  // 1. Освещение
-  ambientLight = new THREE.AmbientLight(0xfff5ea, 0.95);
+  // 2. Сбалансированное освещение
+  // Рассеянный теплый свет умеренной интенсивности
+  ambientLight = new THREE.AmbientLight(0xfff3e0, 0.45);
   scene.add(ambientLight);
 
-  dirLight = new THREE.DirectionalLight(0xfff8ee, 1.25);
+  // Основной свет с мягкими тенями
+  dirLight = new THREE.DirectionalLight(0xfff8ee, 0.75);
   dirLight.position.set(2.0, 3.8, 2.5);
   dirLight.castShadow = true;
   dirLight.shadow.mapSize.width = 1024;
   dirLight.shadow.mapSize.height = 1024;
-  dirLight.shadow.bias = -0.001;
+  dirLight.shadow.bias = -0.0005;
+  dirLight.shadow.camera.near = 0.5;
+  dirLight.shadow.camera.far = 10.0;
+  dirLight.shadow.camera.left = -2.5;
+  dirLight.shadow.camera.right = 2.5;
+  dirLight.shadow.camera.top = 2.5;
+  dirLight.shadow.camera.bottom = -2.5;
   scene.add(dirLight);
 
-  const rimLight = new THREE.DirectionalLight(0xffb6c1, 0.6);
-  rimLight.position.set(-2.5, 2.0, -2.0);
+  // Мягкий контурный контровой свет (Rim Light) сзади модели синеватого оттенка (объем и отделение от фона)
+  const rimLight = new THREE.PointLight(0x90caf9, 0.4, 6.0);
+  rimLight.position.set(0, baseY + 1.2, -1.0);
   scene.add(rimLight);
 
   // 2. Строим процедурную 3D-комнату
@@ -1011,14 +1043,14 @@ function loadCharacterModel() {
       charGroup = new THREE.Group();
       const model = gltf.scene;
 
-      // Обход костей скиннинга
+      // Обход костей скиннинга и мешей
       model.traverse((child) => {
         if (child.isMesh) {
           child.castShadow = true;
           child.receiveShadow = true;
           if (child.material) {
-            child.material.roughness = 0.45;
-            child.material.metalness = 0.08;
+            child.material.roughness = 0.62;
+            child.material.metalness = 0.04;
           }
         }
         if (child.isBone) {
@@ -1026,12 +1058,16 @@ function loadCharacterModel() {
           if (name.includes('head') && !name.includes('top') && !bones.head) bones.head = child;
           else if (name.includes('neck') && !bones.neck) bones.neck = child;
           else if (name.includes('spine') && !bones.spine) bones.spine = child;
+          else if ((name.includes('jaw') || name.includes('mouth') || name.includes('chin')) && !bones.jaw) {
+            bones.jaw = child;
+          }
         }
       });
 
       if (bones.head)  initialBoneRots.head.copy(bones.head.rotation);
       if (bones.neck)  initialBoneRots.neck.copy(bones.neck.rotation);
       if (bones.spine) initialBoneRots.spine.copy(bones.spine.rotation);
+      if (bones.jaw)   initialBoneRots.jaw.copy(bones.jaw.rotation);
 
       // Центрирование модели
       const box = new THREE.Box3().setFromObject(model);
@@ -1142,6 +1178,18 @@ function animate() {
   pointer.x = THREE.MathUtils.lerp(pointer.x, targetPointer.x, 0.08);
   pointer.y = THREE.MathUtils.lerp(pointer.y, targetPointer.y, 0.08);
 
+  // ── Lip-Sync: замер громкости во время проигрывания аудио ──
+  let speechVol = 0;
+  if (isSpeaking && playbackAnalyser) {
+    const fData = new Uint8Array(playbackAnalyser.frequencyBinCount);
+    playbackAnalyser.getByteFrequencyData(fData);
+    let fSum = 0;
+    for (let i = 0; i < fData.length; i++) fSum += fData[i];
+    const avg = fSum / fData.length;
+    speechVol = Math.min(1.0, avg / 60.0);
+  }
+  lipSyncVolume = THREE.MathUtils.lerp(lipSyncVolume, speechVol, 0.35);
+
   if (charGroup) {
     if (!petState.isSleeping) {
       // Процедурный Idle дыхания:
@@ -1162,6 +1210,25 @@ function animate() {
       if (bones.neck) {
         const targetNeckY = initialBoneRots.neck.y + (pointer.x * 0.25);
         bones.neck.rotation.y = THREE.MathUtils.lerp(bones.neck.rotation.y, targetNeckY, 0.09);
+      }
+
+      // ── Lip-Sync: анимация рта и челюсти ──
+      if (bones.jaw) {
+        // Поворот кости челюсти вокруг оси X пропорционально громкости
+        bones.jaw.rotation.x = initialBoneRots.jaw.x + (lipSyncVolume * 0.45);
+      } else if (isSpeaking && lipSyncVolume > 0.04) {
+        // Эмуляция открывания рта и артикуляции через легкое вертикальное сжатие головы и покачивание
+        if (bones.head) {
+          bones.head.scale.y = 1.0 - lipSyncVolume * 0.09;
+          bones.head.scale.x = 1.0 + lipSyncVolume * 0.05;
+          bones.head.rotation.x = initialBoneRots.head.x + lipSyncVolume * 0.16;
+        }
+        charGroup.position.y = baseY + Math.sin(time * 16.0) * (lipSyncVolume * 0.025);
+        charGroup.scale.y = baseScale * (1.0 - lipSyncVolume * 0.035);
+        charGroup.scale.x = baseScale * (1.0 + lipSyncVolume * 0.02);
+      } else if (!isSpeaking && bones.head && bones.head.scale.y !== 1.0) {
+        bones.head.scale.set(1, 1, 1);
+        charGroup.scale.set(baseScale, baseScale, baseScale);
       }
     } else {
       // Спящий режим: опущенная голова, медленное спокойное дыхание
@@ -1488,6 +1555,280 @@ $('btn-tickle')?.addEventListener('click', () => {
     setTimeout(() => spawnHeart(window.innerWidth / 2 + (Math.random() - 0.5) * 60, window.innerHeight * 0.4), i * 80);
   }
 });
+
+// ─── J2. АКУСТИЧЕСКИЙ ПРОФИЛЬ И ПОВТОРЯЛКА ГОЛОСА (WEB AUDIO API) ─────────────
+// Вычисленные константы формант акустического профиля:
+const TARGET_F0 = 178.8; // Базовый тон
+const TARGET_F1 = 609.4; // Объём и теплота
+const TARGET_F2 = 1890.3;// Артикуляция
+const TARGET_F3 = 3020.0;// Тембр и звонкость
+
+let voiceAudioCtx = null;
+let micMediaStream = null;
+let micSourceNode = null;
+let voiceScriptNode = null;
+let vadAnalyserNode = null;
+let playbackAnalyser = null;
+
+let isRepeaterActive = false;
+let isRecordingVoice = false;
+let isSpeaking = false;
+let lipSyncVolume = 0;
+let recordedChunks = [];
+let lastSpeechTime = 0;
+
+const VAD_THRESHOLD = 0.022; // Порог громкости для детекции голоса (VAD)
+const SILENCE_TIMEOUT = 600;  // > 0.6 сек паузы завершает запись и запускает воспроизведение
+
+function showVoiceBadge(status) {
+  const badge = $('voice-status');
+  const dot = $('voice-pulse');
+  const txt = $('voice-status-text');
+  if (!badge) return;
+
+  badge.classList.remove('hidden', 'bg-rose-500/90', 'bg-purple-600/90', 'bg-emerald-600/90', 'border-rose-300', 'border-purple-300', 'border-emerald-300');
+  badge.classList.add('flex');
+
+  if (status === 'listening') {
+    badge.classList.add('bg-rose-500/90', 'border-rose-300', 'text-white');
+    if (dot) dot.className = 'w-2.5 h-2.5 rounded-full bg-white animate-ping';
+    if (txt) txt.innerText = 'Слушаю... 👂🎙️';
+  } else if (status === 'speaking') {
+    badge.classList.add('bg-purple-600/90', 'border-purple-300', 'text-white');
+    if (dot) dot.className = 'w-2.5 h-2.5 rounded-full bg-yellow-300 animate-bounce';
+    if (txt) txt.innerText = 'Говорю! 🗣️✨';
+  } else if (status === 'waiting') {
+    badge.classList.add('bg-emerald-600/90', 'border-emerald-300', 'text-white');
+    if (dot) dot.className = 'w-2.5 h-2.5 rounded-full bg-emerald-200 animate-pulse';
+    if (txt) txt.innerText = 'Жду голос... 👂';
+  }
+}
+
+function hideVoiceBadge() {
+  const badge = $('voice-status');
+  if (badge) {
+    badge.classList.add('hidden');
+    badge.classList.remove('flex');
+  }
+}
+
+async function toggleVoiceRepeater() {
+  safeHaptic('medium');
+  const btn = $('btn-mic');
+  const icon = $('mic-icon');
+  const txt = $('mic-text');
+
+  if (isRepeaterActive) {
+    // Выключение режима повторялки
+    isRepeaterActive = false;
+    isRecordingVoice = false;
+    isSpeaking = false;
+    recordedChunks = [];
+    hideVoiceBadge();
+    btn?.classList.remove('bg-gradient-to-r', 'from-purple-500', 'to-pink-500', 'text-white', 'border-transparent', 'shadow-md', 'animate-pulse');
+    btn?.classList.add('glass', 'text-purple-700', 'border-purple-300');
+    if (icon) icon.innerText = '🎙️';
+    if (txt) txt.innerText = 'Голос';
+    updateSpeech('Режим повторялки выключен 💤');
+    return;
+  }
+
+  // Активация микрофона и аудио-контекста
+  try {
+    if (!voiceAudioCtx) {
+      voiceAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    if (voiceAudioCtx.state === 'suspended') {
+      await voiceAudioCtx.resume();
+    }
+
+    if (!micMediaStream) {
+      micMediaStream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true
+        },
+        video: false
+      });
+
+      micSourceNode = voiceAudioCtx.createMediaStreamSource(micMediaStream);
+
+      // Analyser для VAD
+      vadAnalyserNode = voiceAudioCtx.createAnalyser();
+      vadAnalyserNode.fftSize = 512;
+      micSourceNode.connect(vadAnalyserNode);
+
+      // ScriptProcessor для захвата PCM аудио
+      voiceScriptNode = voiceAudioCtx.createScriptProcessor(2048, 1, 1);
+
+      voiceScriptNode.onaudioprocess = (e) => {
+        if (!isRepeaterActive || isSpeaking) return;
+
+        const inputData = e.inputBuffer.getChannelData(0);
+        let sum = 0;
+        for (let i = 0; i < inputData.length; i++) {
+          sum += inputData[i] * inputData[i];
+        }
+        const rms = Math.sqrt(sum / inputData.length);
+        const now = Date.now();
+
+        if (rms > VAD_THRESHOLD) {
+          if (!isRecordingVoice) {
+            isRecordingVoice = true;
+            recordedChunks = [];
+            showVoiceBadge('listening');
+            updateSpeech('Слушаю тебя очень внимательно! 👂🌸');
+          }
+          lastSpeechTime = now;
+          recordedChunks.push(new Float32Array(inputData));
+        } else if (isRecordingVoice) {
+          recordedChunks.push(new Float32Array(inputData));
+
+          // Пауза > 0.6 сек означает конец фразы
+          if (now - lastSpeechTime > SILENCE_TIMEOUT) {
+            isRecordingVoice = false;
+            // Проверка минимальной длины (не меньше 0.3 сек)
+            const minSamples = Math.floor(voiceAudioCtx.sampleRate * 0.3);
+            let curTotal = 0;
+            for (let c of recordedChunks) curTotal += c.length;
+
+            if (curTotal >= minSamples) {
+              playProcessedVoicePhrase();
+            } else {
+              recordedChunks = [];
+              showVoiceBadge('waiting');
+            }
+          }
+        }
+      };
+
+      // Глушим прямой выход микрофона в динамики во время записи
+      const silentGain = voiceAudioCtx.createGain();
+      silentGain.gain.value = 0;
+
+      micSourceNode.connect(voiceScriptNode);
+      voiceScriptNode.connect(silentGain);
+      silentGain.connect(voiceAudioCtx.destination);
+    }
+
+    isRepeaterActive = true;
+    btn?.classList.remove('glass', 'text-purple-700', 'border-purple-300');
+    btn?.classList.add('bg-gradient-to-r', 'from-purple-500', 'to-pink-500', 'text-white', 'border-transparent', 'shadow-md', 'animate-pulse');
+    if (icon) icon.innerText = '🔴';
+    if (txt) txt.innerText = 'Голос ВКЛ';
+
+    showVoiceBadge('waiting');
+    updateSpeech('Скажи что-нибудь в микрофон, и я повторю мультяшным голоском! 🎙️✨');
+    playSfx('fanfare');
+  } catch (err) {
+    console.error('Ошибка доступа к микрофону:', err);
+    alert('Пожалуйста, разрешите доступ к микрофону в настройках браузера или Telegram, чтобы Лёля могла повторять ваш голос! 🎙️');
+  }
+}
+
+function playProcessedVoicePhrase() {
+  if (recordedChunks.length === 0 || !voiceAudioCtx) return;
+  isSpeaking = true;
+  showVoiceBadge('speaking');
+  updateSpeech('Хи-хи, слушай как звучит! 🎶✨');
+
+  // Собираем PCM сэмплы
+  let totalLength = 0;
+  for (let c of recordedChunks) totalLength += c.length;
+  const merged = new Float32Array(totalLength);
+  let offset = 0;
+  for (let c of recordedChunks) {
+    merged.set(c, offset);
+    offset += c.length;
+  }
+  recordedChunks = [];
+
+  const buffer = voiceAudioCtx.createBuffer(1, totalLength, voiceAudioCtx.sampleRate);
+  buffer.copyToChannel(merged, 0);
+
+  // 1. Источник звука + Pitch Shift (+5..+6 полутонов, коэффициент ~1.35)
+  const source = voiceAudioCtx.createBufferSource();
+  source.buffer = buffer;
+  source.playbackRate.value = 1.35;
+
+  // 2. Формантный фильтр F1 (Объём и теплота): peaking, freq=609.4, Q=2.2, gain=+3.5 dB
+  const f1 = voiceAudioCtx.createBiquadFilter();
+  f1.type = 'peaking';
+  f1.frequency.value = TARGET_F1;
+  f1.Q.value = 2.2;
+  f1.gain.value = 3.5;
+
+  // 3. Формантный фильтр F2 (Артикуляция): peaking, freq=1890.3, Q=2.5, gain=+4.0 dB
+  const f2 = voiceAudioCtx.createBiquadFilter();
+  f2.type = 'peaking';
+  f2.frequency.value = TARGET_F2;
+  f2.Q.value = 2.5;
+  f2.gain.value = 4.0;
+
+  // 4. Формантный фильтр F3 (Тембр и звонкость): peaking, freq=3020.0, Q=3.0, gain=+3.0 dB
+  const f3 = voiceAudioCtx.createBiquadFilter();
+  f3.type = 'peaking';
+  f3.frequency.value = TARGET_F3;
+  f3.Q.value = 3.0;
+  f3.gain.value = 3.0;
+
+  // 5. Динамический компрессор (threshold=-24, knee=30, ratio=8, attack=0.003, release=0.25)
+  const comp = voiceAudioCtx.createDynamicsCompressor();
+  comp.threshold.value = -24;
+  comp.knee.value = 30;
+  comp.ratio.value = 8;
+  comp.attack.value = 0.003;
+  comp.release.value = 0.25;
+
+  // 6. AnalyserNode для измерения громкости во время воспроизведения (Lip-Sync)
+  playbackAnalyser = voiceAudioCtx.createAnalyser();
+  playbackAnalyser.fftSize = 256;
+  playbackAnalyser.smoothingTimeConstant = 0.3;
+
+  // Соединение цепочки Web Audio API:
+  // source -> f1 -> f2 -> f3 -> compressor -> playbackAnalyser -> destination
+  source.connect(f1);
+  f1.connect(f2);
+  f2.connect(f3);
+  f3.connect(comp);
+  comp.connect(playbackAnalyser);
+  playbackAnalyser.connect(voiceAudioCtx.destination);
+
+  source.start(0);
+
+  // Игривая анимация покачивания Talking Tom
+  if (charGroup) {
+    gsap.to(charGroup.rotation, {
+      z: 0.05, duration: 0.16, yoyo: true, repeat: 5, ease: 'sine.inOut',
+      onComplete: () => { if (charGroup) charGroup.rotation.z = 0; }
+    });
+  }
+
+  source.onended = () => {
+    isSpeaking = false;
+    lipSyncVolume = 0;
+    if (isRepeaterActive) {
+      showVoiceBadge('waiting');
+      updateSpeech('Скажи что-нибудь ещё, я повторю! 💖🎙️');
+    } else {
+      hideVoiceBadge();
+    }
+
+    petState.fun = Math.min(100, petState.fun + 8);
+    petState.coins += 2;
+    saveState();
+    updateHUD();
+
+    fetch('/api/action', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'voice' })
+    }).catch(() => {});
+  };
+}
+
+$('btn-mic')?.addEventListener('click', toggleVoiceRepeater);
 
 // ─── K. ВСТРОЕННАЯ АРКАДНАЯ МИНИ-ИГРА «ЛОВЕЦ СЧАСТЬЯ» ────────────────────────
 const arcadeModal = $('arcade-modal');
