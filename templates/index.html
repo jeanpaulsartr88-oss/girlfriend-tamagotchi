@@ -3,20 +3,20 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>Тамагочи Лёли ✨ (Pou Style)</title>
+  <title>Тамагочи Лёли ✨ (My Talking Tom Style)</title>
 
   <!-- Telegram WebApp SDK -->
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
 
-  <!-- Tailwind CSS -->
+  <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
 
-  <!-- Three.js r128 -->
+  <!-- Three.js r128 & GLTFLoader -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
 
-  <!-- GSAP -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+  <!-- GSAP Animation Engine -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
 
   <!-- Canvas Confetti -->
   <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.2/dist/confetti.browser.min.js"></script>
@@ -38,239 +38,226 @@
       overflow: hidden;
       touch-action: none;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      background: #fff1f2;
+      background: #1e1b4b;
     }
     .glass {
-      background: rgba(255, 255, 255, 0.85);
+      background: rgba(255, 255, 255, 0.88);
       backdrop-filter: blur(14px);
       -webkit-backdrop-filter: blur(14px);
-      border: 1px solid rgba(255, 255, 255, 0.7);
+      border: 1px solid rgba(255, 255, 255, 0.75);
     }
-    /* Room backgrounds */
-    .bg-kitchen  { background: radial-gradient(circle at 50% 30%, #fff7ed, #ffedd5 60%, #fed7aa); }
-    .bg-bathroom { background: radial-gradient(circle at 50% 30%, #f0fdfa, #ccfbf1 60%, #99f6e4); }
-    .bg-bedroom  { background: radial-gradient(circle at 50% 30%, #faf5ff, #f3e8ff 60%, #e9d5ff); }
-    .bg-night    { background: radial-gradient(circle at 50% 30%, #1e1b4b, #0f172a 65%, #020617); }
-    .bg-playroom { background: radial-gradient(circle at 50% 30%, #fdf2f8, #fce7f3 60%, #fbcfe8); }
+    .glass-dark {
+      background: rgba(15, 23, 42, 0.75);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+    }
 
-    /* Particles & Visuals */
+    /* Talking Tom Circular Gauge */
+    .gauge-circle {
+      position: relative;
+      width: 58px; height: 58px;
+      display: flex; align-items: center; justify-content: center;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.92);
+      box-shadow: 0 4px 14px rgba(0,0,0,0.12), inset 0 2px 4px rgba(255,255,255,0.8);
+      transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+    .gauge-svg {
+      position: absolute; inset: 0;
+      width: 100%; height: 100%;
+      transform: rotate(-90deg);
+    }
+    .gauge-bg {
+      fill: none;
+      stroke: rgba(0, 0, 0, 0.08);
+      stroke-width: 4.5;
+    }
+    .gauge-meter {
+      fill: none;
+      stroke-width: 4.5;
+      stroke-linecap: round;
+      stroke-dasharray: 163.4;
+      stroke-dashoffset: 40;
+      transition: stroke-dashoffset 0.4s ease, stroke 0.4s ease;
+    }
+    .tab-active .gauge-circle {
+      transform: translateY(-8px) scale(1.12);
+      box-shadow: 0 8px 22px rgba(244, 63, 94, 0.35), 0 0 0 3px #fda4af;
+    }
+
+    /* Warning Pulse for critical needs */
+    @keyframes critPulse {
+      0%, 100% { transform: scale(1); filter: drop-shadow(0 0 2px #ef4444); }
+      50% { transform: scale(1.08); filter: drop-shadow(0 0 10px #ef4444); }
+    }
+    .crit-anim { animation: critPulse 1.2s infinite ease-in-out; }
+
+    /* Particles & Visual FX */
     .soap-bubble {
       position: absolute; border-radius: 50%; pointer-events: none;
       background: radial-gradient(circle at 30% 30%, rgba(255,255,255,.9), rgba(255,255,255,.4) 30%, rgba(186,230,253,.3) 60%, rgba(244,114,182,.4));
       box-shadow: inset 0 0 8px rgba(255,255,255,.8), 0 0 10px rgba(186,230,253,.5);
     }
+    .water-drop {
+      position: absolute; pointer-events: none; z-index: 35;
+      background: linear-gradient(to bottom, rgba(255,255,255,.9), rgba(56,189,248,.7));
+      border-radius: 50% 50% 40% 40%;
+    }
     .sleep-z {
-      position: absolute; color: #c084fc; font-weight: 800; font-size: 20px;
+      position: absolute; color: #c084fc; font-weight: 800; font-size: 22px;
       pointer-events: none; z-index: 35;
-      text-shadow: 0 0 8px rgba(192,132,252,.8);
+      text-shadow: 0 0 10px rgba(192,132,252,.9);
     }
     .flying-item { position: fixed; pointer-events: none; z-index: 60; font-size: 42px; transform: translate(-50%,-50%); }
-    .float-heart { position: absolute; pointer-events: none; z-index: 40; font-size: 26px; transform: translate(-50%,-50%); }
-    .water-drop  { position: absolute; pointer-events: none; z-index: 35;
-                   background: linear-gradient(to bottom, rgba(255,255,255,.9), rgba(56,189,248,.7));
-                   border-radius: 50% 50% 40% 40%; }
+    .float-heart { position: absolute; pointer-events: none; z-index: 40; font-size: 28px; transform: translate(-50%,-50%); }
 
-    @keyframes barPulse { 0%,100%{opacity:1} 50%{opacity:.4} }
-    .bar-critical { animation: barPulse 1s infinite; }
-    .tab-active { background: rgba(255,255,255,.75); box-shadow: 0 2px 8px rgba(0,0,0,.06); }
-    .tab-active span:first-child { opacity: 1 !important; transform: scale(1.1); }
-    @keyframes spin { to{transform:rotate(360deg)} }
-    .spin { animation: spin .8s linear infinite; }
+    /* Speech Bubble */
     .bubble::after {
-      content:''; position:absolute; bottom:-8px; left:50%; transform:translateX(-50%);
-      border-left:8px solid transparent; border-right:8px solid transparent;
-      border-top:8px solid rgba(255,255,255,.95);
+      content: ''; position: absolute; bottom: -8px; left: 50%; transform: translateX(-50%);
+      border-left: 8px solid transparent; border-right: 8px solid transparent;
+      border-top: 8px solid rgba(255, 255, 255, 0.95);
     }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .spin { animation: spin 0.8s linear infinite; }
   </style>
 </head>
-<body class="bg-kitchen transition-colors duration-700 flex flex-col justify-between">
+<body class="flex flex-col justify-between">
 
 <!-- ═══════════════════════════════════════════════════════════
-     0. ЭКРАН ЗАГРУЗКИ
+     0. ЭКРАН ЗАГРУЗКИ 3D-МИРА
 ════════════════════════════════════════════════════════════════ -->
-<div id="loading" class="fixed inset-0 z-50 flex flex-col items-center justify-center bg-gradient-to-b from-pink-100 via-rose-50 to-white transition-opacity duration-500">
+<div id="loading" class="fixed inset-0 z-50 flex flex-col items-center justify-center bg-gradient-to-b from-rose-100 via-pink-50 to-white transition-opacity duration-500">
   <div class="relative w-28 h-28 flex items-center justify-center mb-5">
     <div class="absolute inset-0 rounded-full border-4 border-pink-200 border-t-pink-500 spin"></div>
     <span class="text-4xl animate-bounce">💖</span>
   </div>
-  <h2 class="text-lg font-black text-pink-700 mb-1">Тамагочи Лёли</h2>
-  <p id="load-text" class="text-xs text-pink-500 font-semibold mb-3">Загружаем 3D-мир и оживляем персонажа...</p>
-  <div class="w-48 bg-pink-100 rounded-full h-2.5 overflow-hidden border border-pink-200">
-    <div id="load-bar" class="bg-gradient-to-r from-pink-400 to-rose-500 h-full rounded-full transition-all duration-300" style="width:10%"></div>
+  <h2 class="text-xl font-black text-pink-700 mb-1">Тамагочи Лёли ✨</h2>
+  <p id="load-text" class="text-xs text-pink-500 font-bold mb-3">Строим уютную комнату и зажигаем свет...</p>
+  <div class="w-52 bg-pink-100 rounded-full h-3 overflow-hidden border border-pink-200 p-0.5">
+    <div id="load-bar" class="bg-gradient-to-r from-pink-400 to-rose-500 h-full rounded-full transition-all duration-300" style="width:12%"></div>
   </div>
   <div id="load-error" class="hidden mt-4 text-center px-4">
-    <p class="text-xs text-rose-600 font-medium mb-2">Не удалось загрузить static/models/girl.glb.</p>
+    <p class="text-xs text-rose-600 font-medium mb-2">Не удалось загрузить модель.</p>
     <button onclick="location.reload()" class="bg-rose-500 text-white text-xs px-4 py-2 rounded-xl font-bold shadow-md">Попробовать снова</button>
   </div>
 </div>
 
 <!-- ═══════════════════════════════════════════════════════════
-     1. ВЕРХНИЙ HUD: МОНЕТЫ, КНОПКА СИМУЛЯЦИИ, 4 ШКАЛЫ
+     1. ВЕРХНИЙ ХЕДЕР: МОНЕТЫ, СИМУЛЯЦИЯ ЗАБОТЫ, ЗВУК
 ════════════════════════════════════════════════════════════════ -->
 <header class="w-full max-w-md mx-auto px-3 pt-2 z-30 flex-shrink-0" style="padding-top:calc(var(--sat) + 8px)">
-  <!-- Верхняя строка: Монеты, Звук, Кнопка «Симулировать ❤️ от парня» -->
-  <div class="flex items-center justify-between mb-2 px-1 gap-1.5">
-    <div class="flex items-center gap-1.5 glass px-3 py-1 rounded-full shadow-xs">
-      <span class="text-sm">🪙</span>
+  <div class="flex items-center justify-between px-1 gap-1.5">
+    <!-- Баланс монеток с кнопкой магазина -->
+    <button id="btn-open-shop" type="button" class="flex items-center gap-1.5 glass px-3 py-1.5 rounded-full shadow-sm active:scale-95 transition-transform">
+      <span class="text-base">🪙</span>
       <span id="hud-coins" class="text-xs font-black text-amber-700">100</span>
-      <span class="text-[10px] text-pink-500 font-bold ml-1">Лёля ✨</span>
-    </div>
+      <span class="text-[10px] bg-amber-400 text-amber-950 font-black rounded-full px-1.5 py-0.2">+</span>
+    </button>
 
-    <!-- Кнопка быстрой эмуляции заботы парня -->
-    <button id="btn-quick-sim" type="button" class="glass px-2.5 py-1 rounded-full text-[11px] font-extrabold text-pink-600 border border-pink-300/80 active:scale-95 transition-transform flex items-center gap-1 shadow-xs bg-white/90 hover:bg-pink-50">
-      <span>❤️</span>
+    <!-- Кнопка «Симулировать ❤️ от парня» -->
+    <button id="btn-quick-sim" type="button" class="glass px-3 py-1.5 rounded-full text-[11px] font-extrabold text-pink-600 border border-pink-300 active:scale-95 transition-transform flex items-center gap-1.5 shadow-sm hover:bg-pink-50">
+      <span class="text-sm">❤️</span>
       <span>Симулировать ❤️ от парня</span>
     </button>
 
-    <button id="btn-sound" class="w-8 h-8 rounded-full glass flex items-center justify-center text-sm active:scale-90 transition-transform shadow-xs">🔊</button>
-  </div>
-
-  <!-- 4 Шкалы потребностей (Glassmorphism) -->
-  <div class="glass rounded-2xl p-2.5 shadow-sm border border-white/80 grid grid-cols-4 gap-2">
-    <!-- Сытость -->
-    <div class="flex flex-col items-center">
-      <div class="flex items-center justify-between w-full px-0.5 text-[10px] font-extrabold text-gray-700 mb-0.5">
-        <span>🍕</span><span id="val-hunger" class="text-orange-600">80%</span>
-      </div>
-      <div class="w-full bg-orange-100/70 rounded-full h-2 overflow-hidden">
-        <div id="bar-hunger" class="bg-gradient-to-r from-orange-400 to-amber-500 h-full rounded-full transition-all duration-300" style="width:80%"></div>
-      </div>
-    </div>
-    <!-- Энергия -->
-    <div class="flex flex-col items-center">
-      <div class="flex items-center justify-between w-full px-0.5 text-[10px] font-extrabold text-gray-700 mb-0.5">
-        <span>⚡</span><span id="val-energy" class="text-amber-600">80%</span>
-      </div>
-      <div class="w-full bg-amber-100/70 rounded-full h-2 overflow-hidden">
-        <div id="bar-energy" class="bg-gradient-to-r from-yellow-400 to-amber-500 h-full rounded-full transition-all duration-300" style="width:80%"></div>
-      </div>
-    </div>
-    <!-- Чистота -->
-    <div class="flex flex-col items-center">
-      <div class="flex items-center justify-between w-full px-0.5 text-[10px] font-extrabold text-gray-700 mb-0.5">
-        <span>🧼</span><span id="val-hygiene" class="text-cyan-600">90%</span>
-      </div>
-      <div class="w-full bg-cyan-100/70 rounded-full h-2 overflow-hidden">
-        <div id="bar-hygiene" class="bg-gradient-to-r from-cyan-400 to-blue-500 h-full rounded-full transition-all duration-300" style="width:90%"></div>
-      </div>
-    </div>
-    <!-- Настроение / Веселье -->
-    <div class="flex flex-col items-center">
-      <div class="flex items-center justify-between w-full px-0.5 text-[10px] font-extrabold text-gray-700 mb-0.5">
-        <span>🎮</span><span id="val-fun" class="text-pink-600">85%</span>
-      </div>
-      <div class="w-full bg-pink-100/70 rounded-full h-2 overflow-hidden">
-        <div id="bar-fun" class="bg-gradient-to-r from-pink-400 to-rose-500 h-full rounded-full transition-all duration-300" style="width:85%"></div>
-      </div>
-    </div>
+    <!-- Звук -->
+    <button id="btn-sound" type="button" class="w-8 h-8 rounded-full glass flex items-center justify-center text-sm active:scale-90 transition-transform shadow-sm">🔊</button>
   </div>
 </header>
 
 <!-- ═══════════════════════════════════════════════════════════
-     2. 3D СЦЕНА И ИНТЕРАКТИВНЫЙ ВЬЮВЕР
+     2. ГЛАВНАЯ 3D-СЦЕНА (КОМНАТА + КАМЕРА + ПЕРСОНАЖ)
 ════════════════════════════════════════════════════════════════ -->
 <main class="relative flex-1 w-full max-w-md mx-auto overflow-hidden flex items-center justify-center">
   <!-- Облачко мыслей персонажа -->
   <div class="absolute top-2 left-4 right-4 z-20 pointer-events-none flex justify-center">
     <div id="speech" class="bubble relative max-w-[90%] bg-white/95 backdrop-blur-md border border-pink-200/90 px-4 py-2 rounded-2xl shadow-md text-xs font-bold text-gray-700 text-center leading-snug">
-      Мур! Я так рада тебя видеть! Покорми или погладь меня 🌸✨
-    </div>
-  </div>
-
-  <!-- Ночные декорации (Луна и звёзды в спальне) -->
-  <div id="night-decor" class="absolute inset-0 pointer-events-none opacity-0 transition-opacity duration-700 flex flex-col justify-between p-6">
-    <div class="flex justify-between items-start">
-      <span class="text-4xl animate-pulse">🌙</span>
-      <span class="text-xl text-yellow-200 animate-pulse">✨</span>
-    </div>
-    <div class="flex justify-around items-end">
-      <span class="text-sm text-yellow-100 animate-pulse">⭐</span>
-      <span class="text-lg text-purple-200 animate-pulse">✨</span>
+      Мур! Я так рада тебя видеть! 🌸✨
     </div>
   </div>
 
   <!-- Three.js Canvas Container -->
   <div id="canvas-wrap" class="w-full h-full relative cursor-grab active:cursor-grabbing"></div>
 
-  <!-- Слой частиц: пузыри, сердечки, Z-z-z -->
+  <!-- Слой частиц: мыльные пузыри, сердечки, Z-z-z -->
   <div id="particles" class="absolute inset-0 pointer-events-none overflow-hidden z-25"></div>
 
-  <!-- Мини-игра «Лови подарки» (Комната 4) -->
-  <div id="minigame" class="absolute inset-0 z-40 bg-pink-900/30 backdrop-blur-sm hidden flex-col justify-between p-4">
-    <div class="flex justify-between items-center glass px-4 py-2 rounded-2xl">
-      <div class="text-xs font-black text-pink-700">ОЧКИ: <span id="mg-score" class="text-base text-rose-600">0</span></div>
-      <div class="text-xs font-black text-amber-600">ВРЕМЯ: <span id="mg-timer" class="text-base">30s</span></div>
-      <button id="mg-exit" class="bg-rose-500 text-white text-[10px] font-bold px-2.5 py-1 rounded-xl shadow-xs">Выход</button>
-    </div>
-    <div id="mg-area" class="relative flex-1 w-full overflow-hidden"></div>
-    <div class="text-center text-[11px] text-white font-bold bg-pink-600/80 rounded-full py-1">
-      Тапай по сердечкам и подаркам, пока они летят! 👇
-    </div>
+  <!-- Подсказка кликабельности лампы в спальне -->
+  <div id="lamp-hint" class="absolute top-16 right-6 z-20 hidden pointer-events-none bg-black/60 text-white text-[10px] font-bold px-2 py-1 rounded-full animate-bounce">
+    💡 Тапни на лампу!
   </div>
 </main>
 
 <!-- ═══════════════════════════════════════════════════════════
-     3. НИЖНЯЯ ПАНЕЛЬ КОМНАТ (4 КОМНАТЫ)
+     3. ИНТЕРАКТИВНЫЕ ПОДМЕНЮ КОМНАТ
 ════════════════════════════════════════════════════════════════ -->
-<div class="w-full max-w-md mx-auto px-3 pb-1 z-30 flex-shrink-0">
+<div class="w-full max-w-md mx-auto px-3 pb-2 z-30 flex-shrink-0">
 
-  <!-- 1. 🍕 КУХНЯ -->
-  <div id="shelf-kitchen" class="room-shelf glass rounded-2xl p-2.5 shadow-sm space-y-2">
+  <!-- A. КУХНЯ: Выдвижная карусель с едой -->
+  <div id="shelf-kitchen" class="room-shelf glass rounded-2xl p-2.5 shadow-md space-y-2">
     <div class="flex items-center justify-between px-1">
       <span class="text-[11px] font-black uppercase tracking-wider text-orange-600 flex items-center gap-1">
-        <span>🍕</span> Кухня: покорми Лёлю
+        <span>🍕</span> Карусель вкусняшек
       </span>
-      <span class="text-[10px] text-gray-500">Тапни еду для кормления</span>
+      <span class="text-[10px] text-gray-500 font-medium">Тапни, чтобы покормить</span>
     </div>
-    <div class="grid grid-cols-4 gap-2">
-      <button type="button" class="btn-food flex flex-col items-center p-2 rounded-xl bg-white/90 border border-orange-200 active:scale-95 transition-all shadow-xs" data-food="pizza" data-gain="25" data-emoji="🍕">
-        <span class="text-2xl mb-0.5">🍕</span>
-        <span class="text-[10px] font-bold text-gray-800">Пицца</span>
-        <span class="text-[9px] font-extrabold text-orange-500">+25%</span>
+    <div class="grid grid-cols-6 gap-1.5">
+      <button type="button" class="btn-food flex flex-col items-center p-1.5 rounded-xl bg-white/95 border border-orange-200 active:scale-95 transition-all shadow-xs" data-food="pizza" data-gain="25" data-emoji="🍕">
+        <span class="text-2xl">🍕</span>
+        <span class="text-[9px] font-extrabold text-orange-600">+25%</span>
       </button>
-      <button type="button" class="btn-food flex flex-col items-center p-2 rounded-xl bg-white/90 border border-orange-200 active:scale-95 transition-all shadow-xs" data-food="apple" data-gain="15" data-emoji="🍎">
-        <span class="text-2xl mb-0.5">🍎</span>
-        <span class="text-[10px] font-bold text-gray-800">Яблоко</span>
-        <span class="text-[9px] font-extrabold text-emerald-500">+15%</span>
+      <button type="button" class="btn-food flex flex-col items-center p-1.5 rounded-xl bg-white/95 border border-orange-200 active:scale-95 transition-all shadow-xs" data-food="croissant" data-gain="20" data-emoji="🥐">
+        <span class="text-2xl">🥐</span>
+        <span class="text-[9px] font-extrabold text-amber-600">+20%</span>
       </button>
-      <button type="button" class="btn-food flex flex-col items-center p-2 rounded-xl bg-white/90 border border-orange-200 active:scale-95 transition-all shadow-xs" data-food="cake" data-gain="30" data-emoji="🍰">
-        <span class="text-2xl mb-0.5">🍰</span>
-        <span class="text-[10px] font-bold text-gray-800">Тортик</span>
-        <span class="text-[9px] font-extrabold text-pink-500">+30%</span>
+      <button type="button" class="btn-food flex flex-col items-center p-1.5 rounded-xl bg-white/95 border border-orange-200 active:scale-95 transition-all shadow-xs" data-food="cake" data-gain="30" data-emoji="🍰">
+        <span class="text-2xl">🍰</span>
+        <span class="text-[9px] font-extrabold text-pink-600">+30%</span>
       </button>
-      <button type="button" class="btn-food flex flex-col items-center p-2 rounded-xl bg-white/90 border border-orange-200 active:scale-95 transition-all shadow-xs" data-food="coffee" data-gain="10" data-emoji="☕">
-        <span class="text-2xl mb-0.5">☕</span>
-        <span class="text-[10px] font-bold text-gray-800">Кофе</span>
-        <span class="text-[9px] font-extrabold text-amber-600">+⚡10%</span>
+      <button type="button" class="btn-food flex flex-col items-center p-1.5 rounded-xl bg-white/95 border border-orange-200 active:scale-95 transition-all shadow-xs" data-food="coffee" data-gain="10" data-emoji="☕">
+        <span class="text-2xl">☕</span>
+        <span class="text-[9px] font-extrabold text-amber-700">+⚡10%</span>
+      </button>
+      <button type="button" class="btn-food flex flex-col items-center p-1.5 rounded-xl bg-white/95 border border-orange-200 active:scale-95 transition-all shadow-xs" data-food="watermelon" data-gain="15" data-emoji="🍉">
+        <span class="text-2xl">🍉</span>
+        <span class="text-[9px] font-extrabold text-emerald-600">+15%</span>
+      </button>
+      <button type="button" class="btn-food flex flex-col items-center p-1.5 rounded-xl bg-white/95 border border-orange-200 active:scale-95 transition-all shadow-xs" data-food="icecream" data-gain="20" data-emoji="🍨">
+        <span class="text-2xl">🍨</span>
+        <span class="text-[9px] font-extrabold text-purple-600">+20%</span>
       </button>
     </div>
   </div>
 
-  <!-- 2. 🧼 ВАННАЯ -->
-  <div id="shelf-bathroom" class="room-shelf hidden glass rounded-2xl p-2.5 shadow-sm space-y-2">
+  <!-- B. ВАННАЯ: Губка и Душ -->
+  <div id="shelf-bathroom" class="room-shelf hidden glass rounded-2xl p-2.5 shadow-md space-y-2">
     <div class="flex items-center justify-between px-1">
       <span class="text-[11px] font-black uppercase tracking-wider text-cyan-600 flex items-center gap-1">
-        <span>🧼</span> Ванная: купание
+        <span>🧼</span> Ванная комната
       </span>
-      <span class="text-[10px] text-gray-500">Води пальцем по телу!</span>
+      <span class="text-[10px] text-gray-500">Води пальчиком по персонажу!</span>
     </div>
-    <div class="grid grid-cols-2 gap-2.5">
+    <div class="grid grid-cols-2 gap-2">
       <button id="btn-soap" type="button" class="flex items-center justify-center gap-2 py-3 px-3 rounded-xl bg-white/95 border-2 border-cyan-300 text-cyan-800 font-black text-xs active:scale-95 transition-all shadow-xs">
-        <span class="text-xl">🧼</span><span id="soap-label">Намылить (Свайпай)</span>
+        <span class="text-xl">🧼</span>
+        <span id="soap-label">Губка (Свайпай)</span>
       </button>
       <button id="btn-shower" type="button" class="flex items-center justify-center gap-2 py-3 px-3 rounded-xl bg-gradient-to-r from-cyan-400 to-blue-500 text-white font-black text-xs shadow-md active:scale-95 transition-all">
-        <span class="text-xl">🚿</span><span>Смыть душем!</span>
+        <span class="text-xl">🚿</span>
+        <span>Смыть душем!</span>
       </button>
     </div>
   </div>
 
-  <!-- 3. 🛏 СПАЛЬНЯ -->
-  <div id="shelf-bedroom" class="room-shelf hidden glass rounded-2xl p-2.5 shadow-sm space-y-2">
+  <!-- C. СПАЛЬНЯ: Выключатель света -->
+  <div id="shelf-bedroom" class="room-shelf hidden glass rounded-2xl p-2.5 shadow-md space-y-2">
     <div class="flex items-center justify-between px-1">
       <span class="text-[11px] font-black uppercase tracking-wider text-purple-600 flex items-center gap-1">
-        <span>🛏</span> Спальня: сон и отдых
+        <span>🛏</span> Спальня и отдых
       </span>
-      <span id="sleep-hint" class="text-[10px] text-purple-500 font-bold">+1.5% энергии/мин во сне</span>
+      <span class="text-[10px] text-purple-500 font-bold">+1.5% энергии/мин во сне</span>
     </div>
     <button id="btn-lamp" type="button" class="w-full py-3.5 px-4 rounded-xl bg-gradient-to-r from-purple-500 via-indigo-500 to-purple-600 text-white font-black text-xs shadow-md active:scale-95 transition-all flex items-center justify-center gap-2">
       <span id="lamp-icon" class="text-lg">🌙</span>
@@ -278,53 +265,192 @@
     </button>
   </div>
 
-  <!-- 4. 🎮 ИГРОВАЯ -->
-  <div id="shelf-playroom" class="room-shelf hidden glass rounded-2xl p-2.5 shadow-sm space-y-2">
+  <!-- D. ИГРОВАЯ: Щекотка и Запуск Аркады -->
+  <div id="shelf-playroom" class="room-shelf hidden glass rounded-2xl p-2.5 shadow-md space-y-2">
     <div class="flex items-center justify-between px-1">
       <span class="text-[11px] font-black uppercase tracking-wider text-pink-600 flex items-center gap-1">
-        <span>🎮</span> Игровая: веселье
+        <span>🎮</span> Игровая комната
       </span>
-      <span class="text-[10px] text-gray-500">Пощекочи или сыграй!</span>
+      <span class="text-[10px] text-gray-500">Играй и веселись!</span>
     </div>
-    <div class="grid grid-cols-2 gap-2.5">
+    <div class="grid grid-cols-2 gap-2">
       <button id="btn-tickle" type="button" class="flex items-center justify-center gap-1.5 py-3 px-3 rounded-xl bg-white/95 border border-pink-200 text-pink-700 font-black text-xs active:scale-95 transition-all shadow-xs">
-        <span class="text-lg">🥰</span><span>Пощекотать</span>
+        <span class="text-lg">🥰</span>
+        <span>Пощекотать</span>
       </button>
-      <button id="btn-minigame" type="button" class="flex items-center justify-center gap-1.5 py-3 px-3 rounded-xl bg-gradient-to-r from-pink-500 to-rose-500 text-white font-black text-xs shadow-md active:scale-95 transition-all">
-        <span class="text-lg">🎁</span><span>Лови подарки!</span>
+      <button id="btn-start-arcade" type="button" class="flex items-center justify-center gap-1.5 py-3 px-3 rounded-xl bg-gradient-to-r from-pink-500 to-rose-500 text-white font-black text-xs shadow-md active:scale-95 transition-all">
+        <span class="text-lg">🎁</span>
+        <span>«Ловец Счастья»</span>
       </button>
     </div>
   </div>
 </div>
 
 <!-- ═══════════════════════════════════════════════════════════
-     4. НАВИГАЦИОННЫЙ ТАББАР (КУХНЯ / ВАННАЯ / СПАЛЬНЯ / ИГРОВАЯ)
+     4. НИЖНЯЯ ПАНЕЛЬ С КРУГЛЫМИ ИНДИКАТОРАМИ (TALKING TOM STYLE)
 ════════════════════════════════════════════════════════════════ -->
-<nav class="w-full max-w-md mx-auto px-3 pt-1.5 pb-2 z-30 flex-shrink-0" style="padding-bottom:calc(var(--sab) + 8px)">
-  <div class="glass rounded-2xl p-1.5 shadow-md flex justify-around items-center border border-white/80">
-    <button type="button" class="room-tab tab-active flex flex-col items-center py-1.5 px-3 rounded-xl transition-all" data-room="kitchen">
-      <span class="text-2xl transition-transform">🍕</span>
-      <span class="text-[10px] font-extrabold text-orange-600 mt-0.5">Кухня</span>
+<nav class="w-full max-w-md mx-auto px-4 pb-2 z-30 flex-shrink-0" style="padding-bottom:calc(var(--sab) + 6px)">
+  <div class="glass rounded-3xl p-2 shadow-xl flex justify-around items-center border border-white/80">
+
+    <!-- 1. ЕДА (КУХНЯ) -->
+    <button type="button" class="room-tab tab-active flex flex-col items-center" data-room="kitchen">
+      <div class="gauge-circle" id="circle-hunger">
+        <svg class="gauge-svg" viewBox="0 0 64 64">
+          <circle class="gauge-bg" cx="32" cy="32" r="26"/>
+          <circle id="meter-hunger" class="gauge-meter" cx="32" cy="32" r="26" stroke="#22c55e"/>
+        </svg>
+        <span class="text-2xl">🍴</span>
+      </div>
+      <span id="txt-hunger" class="text-[10px] font-black text-gray-700 mt-1">80%</span>
     </button>
-    <button type="button" class="room-tab flex flex-col items-center py-1.5 px-3 rounded-xl transition-all" data-room="bathroom">
-      <span class="text-2xl opacity-70 transition-transform">🧼</span>
-      <span class="text-[10px] font-bold text-gray-500 mt-0.5">Ванная</span>
+
+    <!-- 2. ВАННАЯ -->
+    <button type="button" class="room-tab flex flex-col items-center" data-room="bathroom">
+      <div class="gauge-circle" id="circle-hygiene">
+        <svg class="gauge-svg" viewBox="0 0 64 64">
+          <circle class="gauge-bg" cx="32" cy="32" r="26"/>
+          <circle id="meter-hygiene" class="gauge-meter" cx="32" cy="32" r="26" stroke="#22c55e"/>
+        </svg>
+        <span class="text-2xl">🧼</span>
+      </div>
+      <span id="txt-hygiene" class="text-[10px] font-black text-gray-700 mt-1">90%</span>
     </button>
-    <button type="button" class="room-tab flex flex-col items-center py-1.5 px-3 rounded-xl transition-all" data-room="bedroom">
-      <span class="text-2xl opacity-70 transition-transform">🛏</span>
-      <span class="text-[10px] font-bold text-gray-500 mt-0.5">Спальня</span>
+
+    <!-- 3. СПАЛЬНЯ -->
+    <button type="button" class="room-tab flex flex-col items-center" data-room="bedroom">
+      <div class="gauge-circle" id="circle-energy">
+        <svg class="gauge-svg" viewBox="0 0 64 64">
+          <circle class="gauge-bg" cx="32" cy="32" r="26"/>
+          <circle id="meter-energy" class="gauge-meter" cx="32" cy="32" r="26" stroke="#22c55e"/>
+        </svg>
+        <span class="text-2xl">🌙</span>
+      </div>
+      <span id="txt-energy" class="text-[10px] font-black text-gray-700 mt-1">80%</span>
     </button>
-    <button type="button" class="room-tab flex flex-col items-center py-1.5 px-3 rounded-xl transition-all" data-room="playroom">
-      <span class="text-2xl opacity-70 transition-transform">🎮</span>
-      <span class="text-[10px] font-bold text-gray-500 mt-0.5">Игровая</span>
+
+    <!-- 4. ИГРЫ -->
+    <button type="button" class="room-tab flex flex-col items-center" data-room="playroom">
+      <div class="gauge-circle" id="circle-fun">
+        <svg class="gauge-svg" viewBox="0 0 64 64">
+          <circle class="gauge-bg" cx="32" cy="32" r="26"/>
+          <circle id="meter-fun" class="gauge-meter" cx="32" cy="32" r="26" stroke="#22c55e"/>
+        </svg>
+        <span class="text-2xl">🎮</span>
+      </div>
+      <span id="txt-fun" class="text-[10px] font-black text-gray-700 mt-1">85%</span>
     </button>
+
   </div>
 </nav>
 
 <!-- ═══════════════════════════════════════════════════════════
-     5. МОДАЛЬНОЕ ОКНО РЕАКЦИИ ПАРНЯ (САЛЮТ)
+     5. ВСТРОЕННАЯ АРКАДНАЯ МИНИ-ИГРА «ЛОВЕЦ СЧАСТЬЯ»
 ════════════════════════════════════════════════════════════════ -->
-<div id="gift-modal" class="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm hidden items-center justify-center p-4">
+<div id="arcade-modal" class="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-md hidden flex-col justify-between p-3">
+  <!-- Верхняя строка аркады: Очки, Жизни, Кнопка выхода -->
+  <div class="flex items-center justify-between glass px-4 py-2 rounded-2xl shadow-lg">
+    <div class="flex items-center gap-1.5">
+      <span class="text-xs font-black text-pink-700">ОЧКИ:</span>
+      <span id="arcade-score" class="text-base font-black text-rose-600">0</span>
+    </div>
+    <div class="flex items-center gap-1" id="arcade-lives">
+      <span class="text-lg">❤️</span>
+      <span class="text-lg">❤️</span>
+      <span class="text-lg">❤️</span>
+    </div>
+    <div class="flex items-center gap-2">
+      <div class="flex items-center gap-1 text-xs font-black text-amber-600">
+        <span>🪙</span>
+        <span id="arcade-coins-earned">0</span>
+      </div>
+      <button id="btn-close-arcade" type="button" class="bg-rose-500 text-white text-[10px] font-black px-2.5 py-1 rounded-xl shadow-xs active:scale-95">Выход</button>
+    </div>
+  </div>
+
+  <!-- Холст игры HTML5 Canvas -->
+  <div class="relative flex-1 w-full my-2 overflow-hidden rounded-2xl border-2 border-white/20 shadow-inner bg-gradient-to-b from-pink-900/40 via-purple-900/30 to-indigo-950/60">
+    <canvas id="arcade-canvas" class="w-full h-full block"></canvas>
+    <!-- Подсказка старта -->
+    <div id="arcade-intro" class="absolute inset-0 flex flex-col items-center justify-center bg-black/50 p-4 text-center">
+      <span class="text-5xl mb-2 animate-bounce">🧺</span>
+      <h3 class="text-lg font-black text-white mb-1">«Ловец Счастья»</h3>
+      <p class="text-xs text-pink-200 max-w-xs mb-4">Лови вкусняшки, букеты и сердечки! Уворачивайся от будильников ⏰ и разбитых сердец 💔</p>
+      <button id="btn-start-game-now" class="bg-gradient-to-r from-pink-500 to-rose-500 text-white font-black text-sm px-6 py-2.5 rounded-2xl shadow-lg active:scale-95 animate-pulse">ИГРАТЬ!</button>
+    </div>
+  </div>
+
+  <div class="text-center text-[11px] text-white/80 font-bold py-0.5">
+    Води пальцем влево-вправо, чтобы двигать сумочку! 👇
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════
+     6. МАГАЗИН УЮТА (КАСТОМИЗАЦИЯ КОМНАТЫ)
+════════════════════════════════════════════════════════════════ -->
+<div id="shop-modal" class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm hidden items-center justify-center p-4">
+  <div class="bg-white rounded-3xl p-5 max-w-sm w-full shadow-2xl space-y-3.5 border-2 border-pink-200">
+    <div class="flex items-center justify-between border-b border-pink-100 pb-2">
+      <div class="flex items-center gap-1.5">
+        <span class="text-xl">🎨</span>
+        <h3 class="text-sm font-black text-pink-800">Магазин Уюта Лёли</h3>
+      </div>
+      <button id="btn-close-shop" class="text-gray-400 hover:text-gray-600 font-bold text-lg">&times;</button>
+    </div>
+
+    <p class="text-[11px] text-gray-500 font-medium">Выбирай стиль обоев и декора для 3D-комнаты за монетки любви!</p>
+
+    <div class="space-y-2">
+      <div class="flex items-center justify-between p-2 rounded-xl border border-pink-200 bg-pink-50/60">
+        <div class="flex items-center gap-2">
+          <span class="w-7 h-7 rounded-lg bg-pink-200 flex items-center justify-center text-sm shadow-xs">🌸</span>
+          <div>
+            <div class="text-xs font-black text-gray-800">Розовый зефир</div>
+            <div class="text-[10px] text-pink-600 font-semibold">Базовый уют</div>
+          </div>
+        </div>
+        <button class="btn-theme-apply bg-pink-500 text-white text-[10px] font-bold px-3 py-1.5 rounded-xl shadow-xs" data-theme="pink" data-cost="0">Применить</button>
+      </div>
+
+      <div class="flex items-center justify-between p-2 rounded-xl border border-emerald-200 bg-emerald-50/60">
+        <div class="flex items-center gap-2">
+          <span class="w-7 h-7 rounded-lg bg-emerald-200 flex items-center justify-center text-sm shadow-xs">🌿</span>
+          <div>
+            <div class="text-xs font-black text-gray-800">Мятный оазис</div>
+            <div class="text-[10px] text-emerald-600 font-semibold">Свежесть и релакс (30 🪙)</div>
+          </div>
+        </div>
+        <button class="btn-theme-apply bg-emerald-500 text-white text-[10px] font-bold px-3 py-1.5 rounded-xl shadow-xs" data-theme="mint" data-cost="30">30 🪙</button>
+      </div>
+
+      <div class="flex items-center justify-between p-2 rounded-xl border border-purple-200 bg-purple-50/60">
+        <div class="flex items-center gap-2">
+          <span class="w-7 h-7 rounded-lg bg-purple-200 flex items-center justify-center text-sm shadow-xs">🔮</span>
+          <div>
+            <div class="text-xs font-black text-gray-800">Лавандовые сны</div>
+            <div class="text-[10px] text-purple-600 font-semibold">Магический закат (50 🪙)</div>
+          </div>
+        </div>
+        <button class="btn-theme-apply bg-purple-500 text-white text-[10px] font-bold px-3 py-1.5 rounded-xl shadow-xs" data-theme="lavender" data-cost="50">50 🪙</button>
+      </div>
+
+      <div class="flex items-center justify-between p-2 rounded-xl border border-amber-200 bg-amber-50/60">
+        <div class="flex items-center gap-2">
+          <span class="w-7 h-7 rounded-lg bg-amber-200 flex items-center justify-center text-sm shadow-xs">👑</span>
+          <div>
+            <div class="text-xs font-black text-gray-800">Золотой закат</div>
+            <div class="text-[10px] text-amber-600 font-semibold">Роскошное сияние (75 🪙)</div>
+          </div>
+        </div>
+        <button class="btn-theme-apply bg-amber-500 text-white text-[10px] font-bold px-3 py-1.5 rounded-xl shadow-xs" data-theme="gold" data-cost="75">75 🪙</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════
+     7. МОДАЛЬНОЕ ОКНО САЛЮТА ОТ ПАРНЯ
+════════════════════════════════════════════════════════════════ -->
+<div id="gift-modal" class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm hidden items-center justify-center p-4">
   <div class="bg-white rounded-3xl p-6 max-w-sm w-full shadow-2xl text-center space-y-4 border-2 border-pink-300">
     <div class="w-20 h-20 bg-pink-100 rounded-full flex items-center justify-center mx-auto text-4xl animate-pulse shadow-inner">🎁</div>
     <div class="space-y-1">
@@ -340,38 +466,29 @@
 </div>
 
 <!-- ═══════════════════════════════════════════════════════════
-     JS СЦЕНАРИИ
+     JAVASCRIPT: 3D СЦЕНА + ИГРОВОЙ ЦИКЛ + АРКАДА
 ════════════════════════════════════════════════════════════════ -->
 <script>
 'use strict';
 
-// ─── A. Telegram WebApp & Безопасный HapticFeedback ───────────────────────────
+// ─── A. Telegram WebApp & Тактильная отдача ──────────────────────────────────
 const tg = window.Telegram?.WebApp;
 if (tg) {
-  tg.ready();
-  tg.expand();
-  try {
-    tg.setHeaderColor('#FFF1F2');
-    tg.setBackgroundColor('#FFF1F2');
-  } catch(_) {}
+  tg.ready(); tg.expand();
+  try { tg.setHeaderColor('#1E1B4B'); tg.setBackgroundColor('#1E1B4B'); } catch(_) {}
 }
 
 const safeHaptic = (type = 'medium') => {
   if (!window.Telegram?.WebApp?.HapticFeedback) return;
   try {
     const hf = window.Telegram.WebApp.HapticFeedback;
-    if (['light', 'medium', 'heavy', 'rigid', 'soft'].includes(type)) {
-      hf.impactOccurred(type);
-    } else if (['error', 'success', 'warning'].includes(type)) {
-      hf.notificationOccurred(type);
-    }
+    if (['light', 'medium', 'heavy', 'rigid', 'soft'].includes(type)) hf.impactOccurred(type);
+    else if (['error', 'success', 'warning'].includes(type)) hf.notificationOccurred(type);
   } catch(_) {}
 };
 
-// ─── B. Синтезированные звуковые эффекты (WebAudio API) ───────────────────────
-let soundOn = true;
-let audioCtx = null;
-
+// ─── B. WebAudio SFX (Без внешних mp3) ────────────────────────────────────────
+let soundOn = true, audioCtx = null;
 const initAudio = () => {
   if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
   if (audioCtx.state === 'suspended') audioCtx.resume();
@@ -383,25 +500,20 @@ const playSfx = (type) => {
     initAudio();
     const now = audioCtx.currentTime;
     const tone = (freq, dur, wave = 'sine', vol = 0.12) => {
-      const osc = audioCtx.createOscillator();
-      const gain = audioCtx.createGain();
-      osc.type = wave;
-      osc.frequency.setValueAtTime(freq, now);
-      gain.gain.setValueAtTime(vol, now);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + dur);
-      osc.connect(gain);
-      gain.connect(audioCtx.destination);
-      osc.start(now);
-      osc.stop(now + dur + 0.01);
+      const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+      o.type = wave; o.frequency.setValueAtTime(freq, now);
+      g.gain.setValueAtTime(vol, now); g.gain.exponentialRampToValueAtTime(0.001, now + dur);
+      o.connect(g); g.connect(audioCtx.destination); o.start(now); o.stop(now + dur + 0.01);
     };
 
-    if (type === 'tap')    tone(520, 0.08);
-    if (type === 'eat')    { tone(600, 0.07, 'triangle', 0.15); setTimeout(() => tone(750, 0.07, 'triangle', 0.12), 70); }
-    if (type === 'soap')   tone(700 + Math.random() * 300, 0.05, 'sine', 0.06);
-    if (type === 'shower') tone(300, 0.35, 'sine', 0.12);
-    if (type === 'fanfare') {
-      [523, 659, 784, 1047].forEach((f, i) => setTimeout(() => tone(f, 0.4, 'sine', 0.18), i * 90));
-    }
+    if (type === 'tap')      tone(520, 0.08);
+    if (type === 'switch')   tone(280, 0.05, 'triangle', 0.2);
+    if (type === 'eat')      { tone(620, 0.07, 'triangle', 0.15); setTimeout(() => tone(780, 0.07, 'triangle', 0.12), 70); }
+    if (type === 'soap')     tone(700 + Math.random() * 300, 0.05, 'sine', 0.06);
+    if (type === 'shower')   tone(300, 0.35, 'sine', 0.12);
+    if (type === 'catch')    tone(880, 0.08, 'sine', 0.15);
+    if (type === 'hurt')     tone(140, 0.25, 'sawtooth', 0.2);
+    if (type === 'fanfare')  { [523, 659, 784, 1047].forEach((f, i) => setTimeout(() => tone(f, 0.4, 'sine', 0.18), i * 90)); }
   } catch(_) {}
 };
 
@@ -411,8 +523,8 @@ document.getElementById('btn-sound').addEventListener('click', () => {
   safeHaptic('light');
 });
 
-// ─── C. Состояние питомца (Game State) & Оффлайн-просчет ─────────────────────
-const STORAGE_KEY = 'lelya_pet_state_v3';
+// ─── C. Состояние питомца (Game State) & Оффлайн ──────────────────────────────
+const STORAGE_KEY = 'lelya_pet_state_tom_v1';
 let petState = {
   hunger: 80,
   energy: 80,
@@ -420,31 +532,29 @@ let petState = {
   fun: 85,
   isSleeping: false,
   coins: 100,
+  theme: 'pink',
   lastUpdate: Date.now()
 };
 
-// Загрузка сохранённого состояния
 try {
   const saved = localStorage.getItem(STORAGE_KEY);
   if (saved) petState = { ...petState, ...JSON.parse(saved) };
 } catch(_) {}
 
-// Оффлайн-деградация шкал по разнице времени
+// Оффлайн-просчет
 (function applyOffline() {
   const now = Date.now();
-  const elapsedMinutes = Math.max(0, (now - (petState.lastUpdate || now)) / 60000);
-  if (elapsedMinutes >= 0.1) {
+  const mins = Math.max(0, (now - (petState.lastUpdate || now)) / 60000);
+  if (mins >= 0.1) {
     if (petState.isSleeping) {
-      // Во сне: ускоренное восстановление энергии (+1.5%/мин), голод падает медленно (-0.2%/мин)
-      petState.energy  = Math.min(100, petState.energy  + elapsedMinutes * 1.5);
-      petState.hunger  = Math.max(0,   petState.hunger  - elapsedMinutes * 0.2);
-      petState.hygiene = Math.max(0,   petState.hygiene - elapsedMinutes * 0.05);
+      petState.energy  = Math.min(100, petState.energy  + mins * 1.5);
+      petState.hunger  = Math.max(0,   petState.hunger  - mins * 0.2);
+      petState.hygiene = Math.max(0,   petState.hygiene - mins * 0.05);
     } else {
-      // Бодрствует: сытость (-0.5%/мин), энергия (-0.3%/мин), чистота (-0.2%/мин), веселье (-0.4%/мин)
-      petState.hunger  = Math.max(0, petState.hunger  - elapsedMinutes * 0.5);
-      petState.energy  = Math.max(0, petState.energy  - elapsedMinutes * 0.3);
-      petState.hygiene = Math.max(0, petState.hygiene - elapsedMinutes * 0.2);
-      petState.fun     = Math.max(0, petState.fun     - elapsedMinutes * 0.4);
+      petState.hunger  = Math.max(0, petState.hunger  - mins * 0.5);
+      petState.energy  = Math.max(0, petState.energy  - mins * 0.3);
+      petState.hygiene = Math.max(0, petState.hygiene - mins * 0.2);
+      petState.fun     = Math.max(0, petState.fun     - mins * 0.4);
     }
   }
   petState.lastUpdate = now;
@@ -456,7 +566,7 @@ const saveState = () => {
   updateHUD();
 };
 
-// Регулярный тик деградации (каждые 10 секунд)
+// Деградация каждые 10 секунд
 setInterval(() => {
   if (petState.isSleeping) {
     petState.energy  = Math.min(100, petState.energy  + 0.25);
@@ -470,8 +580,8 @@ setInterval(() => {
   saveState();
 }, 10000);
 
-// Синхронизация с сервером по POST /api/state
-const syncWithServer = async () => {
+// Синхронизация с сервером
+setInterval(async () => {
   try {
     await fetch('/api/state', {
       method: 'POST',
@@ -479,29 +589,40 @@ const syncWithServer = async () => {
       body: JSON.stringify(petState)
     });
   } catch(_) {}
-};
-setInterval(syncWithServer, 20000);
+}, 20000);
 
-// ─── D. Обновление интерфейса (HUD) ──────────────────────────────────────────
+// ─── D. Talking Tom Circular HUD Updates ──────────────────────────────────────
 const $ = (id) => document.getElementById(id);
+const CIRCUMFERENCE = 163.36; // 2 * PI * 26
 
-const setBar = (id, val) => {
-  const bar = $(id);
-  if (!bar) return;
-  bar.style.width = `${val}%`;
-  bar.classList.toggle('bar-critical', val < 25);
+const updateCircularGauge = (meterId, circleId, textId, val) => {
+  const meter = $(meterId);
+  const circle = $(circleId);
+  const text = $(textId);
+  if (!meter) return;
+
+  const clamped = Math.max(0, Math.min(100, Math.round(val)));
+  const offset = CIRCUMFERENCE * (1 - clamped / 100);
+  meter.style.strokeDashoffset = offset;
+
+  // Динамическая смена цвета: Зеленый (>70%), Желтый (30-70%), Красный (<30%)
+  let color = '#22c55e'; // Green
+  if (clamped < 30) color = '#ef4444'; // Red
+  else if (clamped < 70) color = '#f59e0b'; // Amber
+  meter.style.stroke = color;
+
+  if (circle) circle.classList.toggle('crit-anim', clamped < 30);
+  if (text) {
+    text.innerText = `${clamped}%`;
+    text.style.color = color;
+  }
 };
 
 const updateHUD = () => {
-  const h  = Math.round(petState.hunger);
-  const e  = Math.round(petState.energy);
-  const hy = Math.round(petState.hygiene);
-  const f  = Math.round(petState.fun);
-
-  setBar('bar-hunger',  h);  $('val-hunger').innerText  = `${h}%`;
-  setBar('bar-energy',  e);  $('val-energy').innerText  = `${e}%`;
-  setBar('bar-hygiene', hy); $('val-hygiene').innerText = `${hy}%`;
-  setBar('bar-fun',     f);  $('val-fun').innerText     = `${f}%`;
+  updateCircularGauge('meter-hunger',  'circle-hunger',  'txt-hunger',  petState.hunger);
+  updateCircularGauge('meter-hygiene', 'circle-hygiene', 'txt-hygiene', petState.hygiene);
+  updateCircularGauge('meter-energy',  'circle-energy',  'txt-energy',  petState.energy);
+  updateCircularGauge('meter-fun',     'circle-fun',     'txt-fun',     petState.fun);
   $('hud-coins').innerText = petState.coins;
   updateSpeech();
 };
@@ -514,95 +635,371 @@ const updateSpeech = (customText = null) => {
   if (petState.isSleeping) {
     el.innerText = 'Сладких снов... Мне снишься ты 💤🌙';
   } else if (petState.hunger < 25) {
-    el.innerText = 'Животик урчит... Дай пиццу или тортик! 🍰🥺';
+    el.innerText = 'Животик урчит... Дай пиццу или круассан! 🥐🥺';
   } else if (petState.energy < 25) {
-    el.innerText = 'Глазки слипаются... Отведи в спальню 😴💤';
+    el.innerText = 'Глазки слипаются... Отведи меня в спальню 😴💤';
   } else if (petState.hygiene < 30) {
-    el.innerText = 'Хочу в душ! Намыль меня ароматным мылом 🧼🛁';
+    el.innerText = 'Хочу в душ! Намыль меня ароматной пеной 🧼🛁';
   } else if (petState.fun < 30) {
-    el.innerText = 'Скучно... Пощекочи или сыграй со мной! 🎮🥺';
+    el.innerText = 'Скучно без тебя... Сыграем в «Ловец Счастья»? 🎮🥺';
   } else if (petState.hunger > 80 && petState.fun > 80) {
     el.innerText = 'Мур! Я сыта, счастлива и полна любви! ✨🥰';
   } else {
-    el.innerText = 'Всё отлично! Сижу красивая и думаю о тебе 🌸';
+    el.innerText = 'В комнате так уютно! Сижу и думаю о тебе 🌸';
   }
 };
 
-// ─── E. 3D-СЦЕНА И ПРОЦЕДУРНОЕ ОЖИВЛЕНИЕ (Three.js) ──────────────────────────
+// ─── E. 3D-ОКРУЖЕНИЕ И ПРОЦЕДУРНЫЙ ИНТЕРЬЕР (THREE.JS) ──────────────────────
 const wrap = $('canvas-wrap');
 let scene, camera, renderer, clock;
 let charGroup = null;
 const baseY = -0.52;
 const baseScale = 1.35;
-let dirLight, ambientLight;
 
-// Ссылки на найденные кости скиннинга
+// Источники света Three.js
+let ambientLight, dirLight, lampPointLight;
+
+// Кости модели
 const bones = { head: null, neck: null, spine: null };
 const initialBoneRots = { head: new THREE.Euler(), neck: new THREE.Euler(), spine: new THREE.Euler() };
 
-// Координаты курсора / тача для Look-At
+// Трекинг курсора / пальца
 let pointer = { x: 0, y: 0 };
 let targetPointer = { x: 0, y: 0 };
 
+// Кинематографичный LookAt для камеры
+const cameraLookTarget = { x: 0, y: 0.25, z: 0 };
+
+// Меши комнаты
+let roomBackWall, roomLeftWall, roomRightWall, windowBackdropMesh;
+
 function initThreeScene() {
-  const W = wrap.clientWidth  || window.innerWidth;
-  const H = wrap.clientHeight || window.innerHeight * 0.55;
+  const W = wrap.clientWidth || window.innerWidth;
+  const H = wrap.clientHeight || window.innerHeight * 0.6;
 
   scene = new THREE.Scene();
+  scene.background = new THREE.Color(0xfce7f3);
   clock = new THREE.Clock();
 
   camera = new THREE.PerspectiveCamera(38, W / H, 0.1, 100);
-  camera.position.set(0, 0.25, 2.1);
+  camera.position.set(0.48, 0.35, 1.75); // Стартовая позиция (Кухня)
 
   renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: 'high-performance' });
   renderer.setSize(W, H);
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-  if (THREE.sRGBEncoding) renderer.outputEncoding = THREE.sRGBEncoding;
   wrap.appendChild(renderer.domElement);
 
-  // Освещение: теплый AmbientLight + мягкий DirectionalLight сверху
+  // 1. Освещение
   ambientLight = new THREE.AmbientLight(0xfff5ea, 0.95);
   scene.add(ambientLight);
 
-  dirLight = new THREE.DirectionalLight(0xffffff, 1.25);
-  dirLight.position.set(1.5, 3.5, 2.2);
+  dirLight = new THREE.DirectionalLight(0xfff8ee, 1.25);
+  dirLight.position.set(2.0, 3.8, 2.5);
   dirLight.castShadow = true;
   dirLight.shadow.mapSize.width = 1024;
   dirLight.shadow.mapSize.height = 1024;
   dirLight.shadow.bias = -0.001;
   scene.add(dirLight);
 
-  const rimLight = new THREE.DirectionalLight(0xffb6c1, 0.65);
-  rimLight.position.set(-2, 2, -2);
+  const rimLight = new THREE.DirectionalLight(0xffb6c1, 0.6);
+  rimLight.position.set(-2.5, 2.0, -2.0);
   scene.add(rimLight);
 
-  // Мягкая контактная тень на полу под ногами
-  const canvas = document.createElement('canvas');
-  canvas.width = canvas.height = 128;
-  const ctx = canvas.getContext('2d');
-  const grad = ctx.createRadialGradient(64, 64, 0, 64, 64, 64);
-  grad.addColorStop(0, 'rgba(0,0,0,0.28)');
-  grad.addColorStop(0.5, 'rgba(0,0,0,0.12)');
-  grad.addColorStop(1, 'rgba(0,0,0,0)');
-  ctx.fillStyle = grad;
-  ctx.fillRect(0, 0, 128, 128);
+  // 2. Строим процедурную 3D-комнату
+  build3DRoomEnvironment();
 
-  const shadowMesh = new THREE.Mesh(
-    new THREE.PlaneGeometry(1.4, 1.4),
-    new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(canvas), transparent: true, depthWrite: false })
-  );
-  shadowMesh.rotation.x = -Math.PI / 2;
-  shadowMesh.position.y = baseY + 0.01;
-  scene.add(shadowMesh);
-
+  // 3. Загружаем модель Лёли
   loadCharacterModel();
+
+  // 4. Слушатели событий
   setupPointerTracking();
   window.addEventListener('resize', onResize);
   requestAnimationFrame(animate);
 }
 
+// Построение комнаты
+function build3DRoomEnvironment() {
+  // A. Текстура деревянного паркета для пола (Procedural Canvas)
+  const floorCanvas = document.createElement('canvas');
+  floorCanvas.width = floorCanvas.height = 512;
+  const fCtx = floorCanvas.getContext('2d');
+  fCtx.fillStyle = '#fde68a'; // Тёплая древесина
+  fCtx.fillRect(0, 0, 512, 512);
+
+  // Рисуем дощечки паркета
+  const plankH = 32, plankW = 128;
+  for (let y = 0; y < 512; y += plankH) {
+    const shift = (y / plankH) % 2 === 0 ? 0 : plankW / 2;
+    for (let x = -plankW; x < 512 + plankW; x += plankW) {
+      const shade = 230 + Math.floor(Math.random() * 20);
+      fCtx.fillStyle = `rgb(${shade}, ${shade - 30}, ${shade - 80})`;
+      fCtx.fillRect(x + shift, y, plankW - 2, plankH - 2);
+
+      // Продольные волокна дерева
+      fCtx.strokeStyle = 'rgba(160, 100, 40, 0.15)';
+      fCtx.lineWidth = 1;
+      fCtx.beginPath();
+      fCtx.moveTo(x + shift, y + plankH * 0.4);
+      fCtx.lineTo(x + shift + plankW - 2, y + plankH * 0.4);
+      fCtx.stroke();
+    }
+  }
+
+  const floorTex = new THREE.CanvasTexture(floorCanvas);
+  floorTex.wrapS = floorTex.wrapT = THREE.RepeatWrapping;
+  floorTex.repeat.set(3, 3);
+
+  const floorGeo = new THREE.PlaneGeometry(6, 6);
+  const floorMat = new THREE.MeshStandardMaterial({ map: floorTex, roughness: 0.55, metalness: 0.05 });
+  const floor = new THREE.Mesh(floorGeo, floorMat);
+  floor.rotation.x = -Math.PI / 2;
+  floor.position.y = baseY;
+  floor.receiveShadow = true;
+  scene.add(floor);
+
+  // B. Стены комнаты (Задняя, левая, правая)
+  const wallMat = createWallMaterial('#fff1f2', '#fce7f3');
+
+  roomBackWall = new THREE.Mesh(new THREE.PlaneGeometry(6, 4), wallMat);
+  roomBackWall.position.set(0, baseY + 2.0, -2.4);
+  roomBackWall.receiveShadow = true;
+  scene.add(roomBackWall);
+
+  roomLeftWall = new THREE.Mesh(new THREE.PlaneGeometry(6, 4), wallMat);
+  roomLeftWall.position.set(-2.8, baseY + 2.0, 0);
+  roomLeftWall.rotation.y = Math.PI / 2;
+  roomLeftWall.receiveShadow = true;
+  scene.add(roomLeftWall);
+
+  roomRightWall = new THREE.Mesh(new THREE.PlaneGeometry(6, 4), wallMat);
+  roomRightWall.position.set(2.8, baseY + 2.0, 0);
+  roomRightWall.rotation.y = -Math.PI / 2;
+  roomRightWall.receiveShadow = true;
+  scene.add(roomRightWall);
+
+  // Плинтус по периметру
+  const baseboardMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.4 });
+  const baseboardBack = new THREE.Mesh(new THREE.BoxGeometry(6, 0.14, 0.06), baseboardMat);
+  baseboardBack.position.set(0, baseY + 0.07, -2.37);
+  scene.add(baseboardBack);
+
+  // C. Уютный круглый коврик под ногами персонажа
+  const rugCanvas = document.createElement('canvas');
+  rugCanvas.width = rugCanvas.height = 256;
+  const rCtx = rugCanvas.getContext('2d');
+  rCtx.fillStyle = '#fff5f7';
+  rCtx.beginPath(); rCtx.arc(128, 128, 120, 0, Math.PI * 2); rCtx.fill();
+  rCtx.strokeStyle = '#f472b6'; rCtx.lineWidth = 10; rCtx.stroke();
+  rCtx.strokeStyle = '#fda4af'; rCtx.lineWidth = 4;
+  rCtx.beginPath(); rCtx.arc(128, 128, 98, 0, Math.PI * 2); rCtx.stroke();
+  // Маленькие сердечки по ободу
+  rCtx.fillStyle = '#fb7185'; rCtx.font = '20px sans-serif'; rCtx.textAlign = 'center';
+  for (let i = 0; i < 8; i++) {
+    const ang = (i / 8) * Math.PI * 2;
+    rCtx.fillText('♥', 128 + Math.cos(ang) * 108, 134 + Math.sin(ang) * 108);
+  }
+
+  const rugTex = new THREE.CanvasTexture(rugCanvas);
+  const rugGeo = new THREE.CircleGeometry(1.05, 32);
+  const rugMat = new THREE.MeshStandardMaterial({ map: rugTex, roughness: 0.9, transparent: true });
+  const rug = new THREE.Mesh(rugGeo, rugMat);
+  rug.rotation.x = -Math.PI / 2;
+  rug.position.set(0, baseY + 0.006, 0);
+  rug.receiveShadow = true;
+  scene.add(rug);
+
+  // D. Большое уютное окно на задней стене
+  build3DWindow();
+
+  // E. Мебель: Тумбочка и интерактивная лампа в спальне
+  build3DFurniture();
+
+  // F. Рамка с картиной пары на стене
+  build3DWallArt();
+}
+
+// Генератор материала обоев
+function createWallMaterial(c1, c2) {
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = 256;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = c1;
+  ctx.fillRect(0, 0, 256, 256);
+  // Элегантные вертикальные пастельные полосы
+  ctx.fillStyle = c2;
+  for (let x = 0; x < 256; x += 32) {
+    ctx.fillRect(x, 0, 16, 256);
+  }
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.repeat.set(4, 3);
+  return new THREE.MeshStandardMaterial({ map: tex, roughness: 0.7 });
+}
+
+// Окно с дневным/ночным видом
+function build3DWindow() {
+  const winGroup = new THREE.Group();
+  winGroup.position.set(0.9, baseY + 1.85, -2.35);
+
+  // Задний фон за окном (Небо / Луна)
+  const skyGeo = new THREE.PlaneGeometry(1.6, 1.8);
+  const skyCanvas = document.createElement('canvas');
+  skyCanvas.width = 256; skyCanvas.height = 256;
+  drawWindowSky(skyCanvas, false); // Дневное небо по умолчанию
+
+  const skyTex = new THREE.CanvasTexture(skyCanvas);
+  const skyMat = new THREE.MeshBasicMaterial({ map: skyTex });
+  windowBackdropMesh = new THREE.Mesh(skyGeo, skyMat);
+  windowBackdropMesh.position.set(0, 0, -0.04);
+  winGroup.add(windowBackdropMesh);
+
+  // Рама окна (белое дерево)
+  const frameMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.3 });
+  const outerFrame = new THREE.Mesh(new THREE.BoxGeometry(1.7, 1.9, 0.06), frameMat);
+  winGroup.add(outerFrame);
+
+  // 4 оконных стекла
+  const glassMat = new THREE.MeshStandardMaterial({ color: 0x93c5fd, transparent: true, opacity: 0.25, roughness: 0.1 });
+  const glass = new THREE.Mesh(new THREE.PlaneGeometry(1.5, 1.7), glassMat);
+  glass.position.z = 0.01;
+  winGroup.add(glass);
+
+  // Оконные перекладины (крест)
+  const crossH = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.05, 0.04), frameMat);
+  crossH.position.z = 0.02;
+  winGroup.add(crossH);
+  const crossV = new THREE.Mesh(new THREE.BoxGeometry(0.05, 1.7, 0.04), frameMat);
+  crossV.position.z = 0.02;
+  winGroup.add(crossV);
+
+  // Занавески по бокам
+  const curtainMat = new THREE.MeshStandardMaterial({ color: 0xfda4af, roughness: 0.8 });
+  const curtainL = new THREE.Mesh(new THREE.BoxGeometry(0.25, 2.0, 0.08), curtainMat);
+  curtainL.position.set(-0.95, 0, 0.04);
+  winGroup.add(curtainL);
+  const curtainR = new THREE.Mesh(new THREE.BoxGeometry(0.25, 2.0, 0.08), curtainMat);
+  curtainR.position.set(0.95, 0, 0.04);
+  winGroup.add(curtainR);
+
+  scene.add(winGroup);
+}
+
+function drawWindowSky(canvas, isNight) {
+  const ctx = canvas.getContext('2d');
+  if (!isNight) {
+    // День: градиентное голубое небо и облачка
+    const grad = ctx.createLinearGradient(0, 0, 0, 256);
+    grad.addColorStop(0, '#60a5fa'); grad.addColorStop(1, '#e0f2fe');
+    ctx.fillStyle = grad; ctx.fillRect(0, 0, 256, 256);
+    ctx.fillStyle = '#fef08a';
+    ctx.beginPath(); ctx.arc(190, 60, 28, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,0.7)';
+    ctx.beginPath(); ctx.arc(70, 100, 30, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(100, 95, 40, 0, Math.PI * 2); ctx.fill();
+  } else {
+    // Ночь: темно-синее небо, сияющая луна и звезды
+    const grad = ctx.createLinearGradient(0, 0, 0, 256);
+    grad.addColorStop(0, '#0f172a'); grad.addColorStop(1, '#1e1b4b');
+    ctx.fillStyle = grad; ctx.fillRect(0, 0, 256, 256);
+    // Луна
+    ctx.fillStyle = '#fde047';
+    ctx.beginPath(); ctx.arc(180, 70, 26, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#0f172a';
+    ctx.beginPath(); ctx.arc(170, 65, 22, 0, Math.PI * 2); ctx.fill();
+    // Звезды
+    ctx.fillStyle = '#ffffff';
+    [[40, 50], [90, 80], [130, 40], [60, 140], [210, 130], [150, 160]].forEach(([x, y]) => {
+      ctx.fillRect(x, y, 3, 3);
+    });
+  }
+}
+
+// 3D Мебель
+function build3DFurniture() {
+  // 1. Тумбочка слева (Bedside nightstand)
+  const standMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.35 });
+  const stand = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.6, 0.6), standMat);
+  stand.position.set(-1.45, baseY + 0.3, -1.3);
+  stand.castShadow = stand.receiveShadow = true;
+  scene.add(stand);
+
+  // 2. Интерактивная лампа на тумбочке
+  const lampGroup = new THREE.Group();
+  lampGroup.position.set(-1.45, baseY + 0.6, -1.3);
+
+  // Ножка лампы
+  const stemMat = new THREE.MeshStandardMaterial({ color: 0xd4af37, metalness: 0.8, roughness: 0.2 });
+  const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.08, 0.35, 16), stemMat);
+  stem.position.y = 0.175;
+  lampGroup.add(stem);
+
+  // Абажур лампы
+  const shadeMat = new THREE.MeshStandardMaterial({ color: 0xfef08a, roughness: 0.6, emissive: 0xfef08a, emissiveIntensity: 0.4 });
+  const shade = new THREE.Mesh(new THREE.ConeGeometry(0.22, 0.26, 24, 1, true), shadeMat);
+  shade.position.y = 0.42;
+  lampGroup.add(shade);
+
+  // Точечный свет лампы
+  lampPointLight = new THREE.PointLight(0xffe4a0, 1.1, 4.0);
+  lampPointLight.position.y = 0.38;
+  lampPointLight.castShadow = true;
+  lampGroup.add(lampPointLight);
+
+  scene.add(lampGroup);
+
+  // Клик по лампе в 3D
+  stand.userData = { isLamp: true };
+  shade.userData = { isLamp: true };
+
+  // 3. Столик с кружкой кофе на кухне (справа)
+  const counterMat = new THREE.MeshStandardMaterial({ color: 0xfef3c7, roughness: 0.4 });
+  const counter = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.7, 0.7), counterMat);
+  counter.position.set(1.45, baseY + 0.35, -0.6);
+  counter.castShadow = counter.receiveShadow = true;
+  scene.add(counter);
+
+  // Чашка кофе на столике
+  const mugMat = new THREE.MeshStandardMaterial({ color: 0xf43f5e, roughness: 0.2 });
+  const mug = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.07, 0.14, 16), mugMat);
+  mug.position.set(1.4, baseY + 0.77, -0.6);
+  scene.add(mug);
+}
+
+// Картина пары на стене
+function build3DWallArt() {
+  const artGroup = new THREE.Group();
+  artGroup.position.set(-1.1, baseY + 1.9, -2.37);
+
+  // Рамка картины
+  const frameMat = new THREE.MeshStandardMaterial({ color: 0xd97706, roughness: 0.3 });
+  const frame = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.7, 0.05), frameMat);
+  artGroup.add(frame);
+
+  // Холст с романтической иллюстрацией
+  const cCanvas = document.createElement('canvas');
+  cCanvas.width = 256; cCanvas.height = 192;
+  const cCtx = cCanvas.getContext('2d');
+  cCtx.fillStyle = '#fff1f2'; cCtx.fillRect(0, 0, 256, 192);
+  cCtx.fillStyle = '#f43f5e'; cCtx.font = 'bold 28px sans-serif';
+  cCtx.textAlign = 'center';
+  cCtx.fillText('Лёля + Любимый', 128, 80);
+  cCtx.font = '40px sans-serif';
+  cCtx.fillText('💖', 128, 130);
+  cCtx.font = '14px sans-serif';
+  cCtx.fillStyle = '#9d174d';
+  cCtx.fillText('Вместе навсегда ✨', 128, 165);
+
+  const artTex = new THREE.CanvasTexture(cCanvas);
+  const artMesh = new THREE.Mesh(new THREE.PlaneGeometry(0.8, 0.6), new THREE.MeshBasicMaterial({ map: artTex }));
+  artMesh.position.z = 0.026;
+  artGroup.add(artMesh);
+
+  scene.add(artGroup);
+}
+
+// Загрузка модели Лёли
 function loadCharacterModel() {
   const loader = new THREE.GLTFLoader();
   const bar = $('load-bar');
@@ -614,7 +1011,7 @@ function loadCharacterModel() {
       charGroup = new THREE.Group();
       const model = gltf.scene;
 
-      // Обход модели: тени и поиск костей головы / шеи
+      // Обход костей скиннинга
       model.traverse((child) => {
         if (child.isMesh) {
           child.castShadow = true;
@@ -636,7 +1033,7 @@ function loadCharacterModel() {
       if (bones.neck)  initialBoneRots.neck.copy(bones.neck.rotation);
       if (bones.spine) initialBoneRots.spine.copy(bones.spine.rotation);
 
-      // Центрирование и масштабирование под экран телефона
+      // Центрирование модели
       const box = new THREE.Box3().setFromObject(model);
       const size = box.getSize(new THREE.Vector3());
       const center = box.getCenter(new THREE.Vector3());
@@ -650,7 +1047,6 @@ function loadCharacterModel() {
       charGroup.position.y = baseY;
       scene.add(charGroup);
 
-      // Плавное скрытие спиннера загрузки
       if (bar) bar.style.width = '100%';
       setTimeout(() => {
         const loadingScr = $('loading');
@@ -668,14 +1064,14 @@ function loadCharacterModel() {
       }
     },
     (err) => {
-      console.error('Ошибка загрузки static/models/girl.glb:', err);
-      const errDiv = $('load-error');
-      if (errDiv) errDiv.classList.remove('hidden');
+      console.error('Ошибка загрузки girl.glb:', err);
+      if ($('load-error')) $('load-error').classList.remove('hidden');
       if (txt) txt.innerText = 'Ошибка загрузки 3D-модели.';
     }
   );
 }
 
+// Трекинг тачей / курсора
 function setupPointerTracking() {
   const onMove = (e) => {
     const t = e.touches ? e.touches[0] : e;
@@ -686,14 +1082,30 @@ function setupPointerTracking() {
   window.addEventListener('mousemove', onMove);
   window.addEventListener('touchmove', onMove, { passive: true });
 
-  // Тап по персонажу -> Pou Squash & Stretch
-  wrap.addEventListener('click', () => {
+  // Клик по сцене (Squash & Stretch или выключатель лампы)
+  wrap.addEventListener('click', (e) => {
     if (currentRoom === 'bathroom' && isSoapActive) return;
+
+    // Raycast для клика по лампе в спальне
+    const mouse = new THREE.Vector2(
+      (e.clientX / window.innerWidth) * 2 - 1,
+      -(e.clientY / window.innerHeight) * 2 + 1
+    );
+    const raycaster = new THREE.Raycaster();
+    raycaster.setFromCamera(mouse, camera);
+    const intersects = raycaster.intersectObjects(scene.children, true);
+    for (let hit of intersects) {
+      if (hit.object.userData?.isLamp) {
+        toggleBedroomLights();
+        return;
+      }
+    }
+
     triggerSquashAndStretch();
   });
 }
 
-// 4. Отклик Squash & Stretch в стиле Pou: сжатие {x: 1.15, y: 0.85, z: 1.15} на 0.15с
+// 4. Talking Tom Squash & Stretch
 function triggerSquashAndStretch() {
   if (!charGroup) return;
   safeHaptic('medium');
@@ -708,33 +1120,31 @@ function triggerSquashAndStretch() {
     ease: 'power2.out',
     onComplete: () => {
       gsap.to(charGroup.scale, {
-        x: baseScale,
-        y: baseScale,
-        z: baseScale,
-        duration: 0.55,
-        ease: 'elastic.out(1.2, 0.3)'
+        x: baseScale, y: baseScale, z: baseScale,
+        duration: 0.55, ease: 'elastic.out(1.2, 0.3)'
       });
     }
   });
   spawnHeart(window.innerWidth / 2, window.innerHeight * 0.45);
 }
 
-// Цикл рендеринга: Процедурный Idle дыхания + плавный Look-At
+// Главный цикл рендера
 function animate() {
   requestAnimationFrame(animate);
   if (!scene || !renderer) return;
 
   const time = clock.getElapsedTime();
 
-  // Плавное слежение (lerp)
+  // Плавный Look-At камеры
+  camera.lookAt(cameraLookTarget.x, cameraLookTarget.y, cameraLookTarget.z);
+
+  // Плавный поворот головы (Look-At)
   pointer.x = THREE.MathUtils.lerp(pointer.x, targetPointer.x, 0.08);
   pointer.y = THREE.MathUtils.lerp(pointer.y, targetPointer.y, 0.08);
 
   if (charGroup) {
     if (!petState.isSleeping) {
-      // 2. Процедурный Idle:
-      // Синусоида дыхания: model.position.y = Math.sin(time * 2) * 0.03
-      // Легкое покачивание плеч по оси Z: model.rotation.z = Math.sin(time * 1) * 0.015
+      // Процедурный Idle дыхания:
       charGroup.position.y = baseY + Math.sin(time * 2.0) * 0.03;
       charGroup.rotation.z = Math.sin(time * 1.0) * 0.015;
 
@@ -742,7 +1152,7 @@ function animate() {
         bones.spine.rotation.x = initialBoneRots.spine.x + Math.sin(time * 2.0) * 0.02;
       }
 
-      // 3. Look-At: плавно через THREE.MathUtils.lerp поворачивать голову/шею за пальцем
+      // Голова и шея смотрят за пальцем
       if (bones.head) {
         const targetHeadY = initialBoneRots.head.y + (pointer.x * 0.55);
         const targetHeadX = initialBoneRots.head.x - (pointer.y * 0.35);
@@ -754,7 +1164,7 @@ function animate() {
         bones.neck.rotation.y = THREE.MathUtils.lerp(bones.neck.rotation.y, targetNeckY, 0.09);
       }
     } else {
-      // Режим сна: персонаж опускает голову, медленное дыхание
+      // Спящий режим: опущенная голова, медленное спокойное дыхание
       charGroup.position.y = baseY + Math.sin(time * 1.0) * 0.012;
       charGroup.rotation.z = Math.sin(time * 0.5) * 0.006;
       if (bones.head) {
@@ -769,62 +1179,70 @@ function animate() {
 
 function onResize() {
   if (!renderer || !camera) return;
-  const W = wrap.clientWidth  || window.innerWidth;
-  const H = wrap.clientHeight || window.innerHeight * 0.55;
+  const W = wrap.clientWidth || window.innerWidth;
+  const H = wrap.clientHeight || window.innerHeight * 0.6;
   camera.aspect = W / H;
   camera.updateProjectionMatrix();
   renderer.setSize(W, H);
 }
 
-// ─── F. Переключение комнат (4 комнаты) ──────────────────────────────────────
+// ─── F. КИНЕМАТОГРАФИЧНОЕ ПЕРЕКЛЮЧЕНИЕ КОМНАТ (КАМЕРА GSAP) ──────────────────
 let currentRoom = 'kitchen';
-const shelves = {
+const roomShelves = {
   kitchen:  $('shelf-kitchen'),
   bathroom: $('shelf-bathroom'),
   bedroom:  $('shelf-bedroom'),
   playroom: $('shelf-playroom')
 };
 
+// Конфигурация камеры для каждой комнаты
+const roomCameraConfigs = {
+  playroom: {
+    camPos: { x: 0, y: 0.45, z: 2.35 },
+    lookAt: { x: 0, y: 0.25, z: 0 }
+  },
+  kitchen: {
+    camPos: { x: 0.48, y: 0.35, z: 1.75 },
+    lookAt: { x: 0.12, y: 0.28, z: -0.1 }
+  },
+  bathroom: {
+    camPos: { x: 0, y: 0.38, z: 1.7 },
+    lookAt: { x: 0, y: 0.22, z: 0 }
+  },
+  bedroom: {
+    camPos: { x: -0.45, y: 0.32, z: 1.8 },
+    lookAt: { x: -0.1, y: 0.18, z: -0.2 }
+  }
+};
+
 function switchRoom(roomName) {
   currentRoom = roomName;
   safeHaptic('light');
 
+  // Переключение стилей табов
   document.querySelectorAll('.room-tab').forEach(tab => {
-    const active = tab.dataset.room === roomName;
-    tab.classList.toggle('tab-active', active);
-    const icon  = tab.querySelector('span:first-child');
-    const label = tab.querySelector('span:last-child');
-    if (icon)  icon.classList.toggle('opacity-70', !active);
-    if (label) label.className = active
-      ? 'text-[10px] font-extrabold text-pink-600 mt-0.5'
-      : 'text-[10px] font-bold text-gray-500 mt-0.5';
+    tab.classList.toggle('tab-active', tab.dataset.room === roomName);
   });
 
-  Object.keys(shelves).forEach(k => {
-    if (shelves[k]) shelves[k].classList.toggle('hidden', k !== roomName);
+  // Переключение полок действий
+  Object.keys(roomShelves).forEach(k => {
+    if (roomShelves[k]) roomShelves[k].classList.toggle('hidden', k !== roomName);
   });
 
-  const nightDecor = $('night-decor');
-  document.body.className = 'transition-colors duration-700 flex flex-col justify-between';
+  // Плавный полет камеры через GSAP
+  const cfg = roomCameraConfigs[roomName] || roomCameraConfigs.playroom;
+  gsap.to(camera.position, {
+    x: cfg.camPos.x, y: cfg.camPos.y, z: cfg.camPos.z,
+    duration: 1.1, ease: 'power2.inOut'
+  });
+  gsap.to(cameraLookTarget, {
+    x: cfg.lookAt.x, y: cfg.lookAt.y, z: cfg.lookAt.z,
+    duration: 1.1, ease: 'power2.inOut'
+  });
 
-  if (roomName === 'kitchen') {
-    document.body.classList.add('bg-kitchen');
-    if (nightDecor) nightDecor.style.opacity = '0';
-  } else if (roomName === 'bathroom') {
-    document.body.classList.add('bg-bathroom');
-    if (nightDecor) nightDecor.style.opacity = '0';
-  } else if (roomName === 'bedroom') {
-    if (petState.isSleeping) {
-      document.body.classList.add('bg-night');
-      if (nightDecor) nightDecor.style.opacity = '1';
-    } else {
-      document.body.classList.add('bg-bedroom');
-      if (nightDecor) nightDecor.style.opacity = '0';
-    }
-  } else if (roomName === 'playroom') {
-    document.body.classList.add('bg-playroom');
-    if (nightDecor) nightDecor.style.opacity = '0';
-  }
+  // Подсказка лампы в спальне
+  const lampHint = $('lamp-hint');
+  if (lampHint) lampHint.classList.toggle('hidden', roomName !== 'bedroom');
 
   updateSpeech();
 }
@@ -833,11 +1251,11 @@ document.querySelectorAll('.room-tab').forEach(tab => {
   tab.addEventListener('click', () => switchRoom(tab.dataset.room));
 });
 
-// ─── G. Комната 1: 🍕 КУХНЯ (Кормление) ───────────────────────────────────────
+// ─── G. КУХНЯ: КОРМЛЕНИЕ ИЗ КАРУСЕЛИ ──────────────────────────────────────────
 document.querySelectorAll('.btn-food').forEach(btn => {
   btn.addEventListener('click', () => {
-    const food  = btn.dataset.food;
-    const gain  = parseFloat(btn.dataset.gain) || 20;
+    const food = btn.dataset.food;
+    const gain = parseFloat(btn.dataset.gain) || 20;
     const emoji = btn.dataset.emoji || '🍕';
 
     if (petState.hunger >= 100 && food !== 'coffee') {
@@ -846,10 +1264,7 @@ document.querySelectorAll('.btn-food').forEach(btn => {
       if (bones.head) {
         gsap.to(bones.head.rotation, {
           y: initialBoneRots.head.y + 0.35,
-          duration: 0.08,
-          yoyo: true,
-          repeat: 5,
-          ease: 'power1.inOut'
+          duration: 0.08, yoyo: true, repeat: 5, ease: 'power1.inOut'
         });
       }
       return;
@@ -858,7 +1273,7 @@ document.querySelectorAll('.btn-food').forEach(btn => {
     safeHaptic('medium');
     playSfx('eat');
 
-    // Еда визуально летит в рот персонажу
+    // 2D элемент еды летит со стола прямо в область рта персонажа
     const rect = btn.getBoundingClientRect();
     const flyingFood = document.createElement('div');
     flyingFood.className = 'flying-item';
@@ -868,32 +1283,27 @@ document.querySelectorAll('.btn-food').forEach(btn => {
     document.body.appendChild(flyingFood);
 
     gsap.to(flyingFood, {
-      left: window.innerWidth / 2,
+      left: window.innerWidth * 0.52,
       top:  window.innerHeight * 0.42,
-      scale: 0.3,
-      opacity: 0.2,
-      duration: 0.5,
-      ease: 'power2.inOut',
+      scale: 0.35, opacity: 0.2, duration: 0.55, ease: 'power2.inOut',
       onComplete: () => {
         flyingFood.remove();
 
-        // Подпрыг персонажа
+        // Подпрыгивание и жевание
         if (charGroup) {
           gsap.to(charGroup.position, {
-            y: baseY + 0.22,
-            duration: 0.16,
-            yoyo: true,
-            repeat: 1,
-            ease: 'power2.out'
+            y: baseY + 0.22, duration: 0.16, yoyo: true, repeat: 1, ease: 'power2.out'
           });
         }
 
         petState.hunger = Math.min(100, petState.hunger + gain);
         if (food === 'coffee') petState.energy = Math.min(100, petState.energy + 12);
+        else if (food === 'watermelon') petState.hygiene = Math.min(100, petState.hygiene + 8);
+        else if (food === 'icecream') petState.fun = Math.min(100, petState.fun + 10);
         petState.coins += 2;
         saveState();
 
-        spawnFloatingText(`+${gain}% 😋`, window.innerWidth / 2, window.innerHeight * 0.42);
+        spawnFloatingText(`+${gain}% 😋`, window.innerWidth * 0.52, window.innerHeight * 0.42);
         safeHaptic('success');
         updateSpeech('Ням-ням! Очень вкусно! 🍰🥰');
       }
@@ -901,7 +1311,7 @@ document.querySelectorAll('.btn-food').forEach(btn => {
   });
 });
 
-// ─── H. Комната 2: 🧼 ВАННАЯ (Мыло и Душ) ────────────────────────────────────
+// ─── H. ВАННАЯ: ПЕННЫЕ ПУЗЫРИ И ДУШ ──────────────────────────────────────────
 let isSoapActive = false;
 const soapLabel = $('soap-label');
 
@@ -910,7 +1320,7 @@ $('btn-soap')?.addEventListener('click', () => {
   safeHaptic('medium');
   $('btn-soap').classList.toggle('bg-cyan-100', isSoapActive);
   $('btn-soap').classList.toggle('border-cyan-500', isSoapActive);
-  if (soapLabel) soapLabel.innerText = isSoapActive ? 'Мыло активно! Свайпай' : 'Намылить (Свайпай)';
+  if (soapLabel) soapLabel.innerText = isSoapActive ? 'Губка активна!' : 'Губка (Свайпай)';
   if (isSoapActive) updateSpeech('Води пальчиком по мне, хочу много пены! 🫧');
 });
 
@@ -922,7 +1332,7 @@ const spawnBubble = (x, y) => {
 
   const b = document.createElement('div');
   b.className = 'soap-bubble';
-  const size = 24 + Math.random() * 26;
+  const size = 24 + Math.random() * 28;
   b.style.width  = `${size}px`;
   b.style.height = `${size}px`;
   b.style.left   = `${x}px`;
@@ -930,8 +1340,8 @@ const spawnBubble = (x, y) => {
   overlay.appendChild(b);
 
   gsap.to(b, {
-    x: (Math.random() - 0.5) * 40,
-    y: -60 - Math.random() * 60,
+    x: (Math.random() - 0.5) * 45,
+    y: -70 - Math.random() * 60,
     opacity: 0,
     duration: 1.4 + Math.random() * 0.8,
     ease: 'power1.out',
@@ -958,6 +1368,7 @@ $('btn-shower')?.addEventListener('click', () => {
   playSfx('shower');
   updateSpeech('Освежающий душ! Все пузырьки смыты! 🚿✨');
 
+  // Струи воды
   for (let i = 0; i < 45; i++) {
     setTimeout(() => {
       const drop = document.createElement('div');
@@ -969,10 +1380,8 @@ $('btn-shower')?.addEventListener('click', () => {
       $('particles')?.appendChild(drop);
 
       gsap.to(drop, {
-        top: window.innerHeight * 0.7,
-        opacity: 0.1,
-        duration: 0.5 + Math.random() * 0.4,
-        ease: 'power2.in',
+        top: window.innerHeight * 0.7, opacity: 0.1,
+        duration: 0.5 + Math.random() * 0.4, ease: 'power2.in',
         onComplete: () => drop.remove()
       });
     }, i * 25);
@@ -980,7 +1389,7 @@ $('btn-shower')?.addEventListener('click', () => {
 
   setTimeout(() => {
     if (charGroup) {
-      gsap.to(charGroup.rotation, { y: 0.2, duration: 0.08, yoyo: true, repeat: 5, ease: 'power1.inOut' });
+      gsap.to(charGroup.rotation, { y: 0.25, duration: 0.08, yoyo: true, repeat: 5, ease: 'power1.inOut' });
     }
     petState.hygiene = 100;
     petState.coins += 5;
@@ -989,27 +1398,29 @@ $('btn-shower')?.addEventListener('click', () => {
   }, 600);
 
   isSoapActive = false;
-  if (soapLabel) soapLabel.innerText = 'Намылить (Свайпай)';
+  if (soapLabel) soapLabel.innerText = 'Губка (Свайпай)';
   $('btn-soap')?.classList.remove('bg-cyan-100', 'border-cyan-500');
 });
 
-// ─── I. Комната 3: 🛏 СПАЛЬНЯ (Свет, сон, Z-z-z) ──────────────────────────────
+// ─── I. СПАЛЬНЯ: ИНТЕРАКТИВНЫЙ ВЫКЛЮЧАТЕЛЬ СВЕТА ─────────────────────────────
 let sleepZInterval = null;
 
-$('btn-lamp')?.addEventListener('click', () => {
+function toggleBedroomLights() {
   petState.isSleeping = !petState.isSleeping;
   safeHaptic('medium');
+  playSfx('switch');
   saveState();
 
-  const nightDecor = $('night-decor');
-
   if (petState.isSleeping) {
-    // Выключатель света приглушает свет Three.js (intensity = 0.05), персонаж опускает голову
-    if (dirLight)     gsap.to(dirLight,     { intensity: 0.05, duration: 1.0 });
-    if (ambientLight) gsap.to(ambientLight, { intensity: 0.08, duration: 1.0 });
+    // При выключении света: Three.js свет приглушается, в окне загорается луна
+    if (dirLight)       gsap.to(dirLight,       { intensity: 0.05, duration: 1.0 });
+    if (ambientLight)   gsap.to(ambientLight,   { intensity: 0.08, duration: 1.0 });
+    if (lampPointLight) gsap.to(lampPointLight, { intensity: 0.15, duration: 1.0 });
 
-    document.body.className = 'transition-colors duration-700 flex flex-col justify-between bg-night';
-    if (nightDecor) nightDecor.style.opacity = '1';
+    if (windowBackdropMesh?.material?.map?.image) {
+      drawWindowSky(windowBackdropMesh.material.map.image, true);
+      windowBackdropMesh.material.map.needsUpdate = true;
+    }
 
     $('lamp-icon').innerText  = '☀️';
     $('lamp-label').innerText = 'ВКЛЮЧИТЬ СВЕТ (Разбудить)';
@@ -1017,11 +1428,14 @@ $('btn-lamp')?.addEventListener('click', () => {
     startSleepZ();
   } else {
     // Включение света
-    if (dirLight)     gsap.to(dirLight,     { intensity: 1.25, duration: 0.8 });
-    if (ambientLight) gsap.to(ambientLight, { intensity: 0.95, duration: 0.8 });
+    if (dirLight)       gsap.to(dirLight,       { intensity: 1.25, duration: 0.8 });
+    if (ambientLight)   gsap.to(ambientLight,   { intensity: 0.95, duration: 0.8 });
+    if (lampPointLight) gsap.to(lampPointLight, { intensity: 1.1,  duration: 0.8 });
 
-    document.body.className = 'transition-colors duration-700 flex flex-col justify-between bg-bedroom';
-    if (nightDecor) nightDecor.style.opacity = '0';
+    if (windowBackdropMesh?.material?.map?.image) {
+      drawWindowSky(windowBackdropMesh.material.map.image, false);
+      windowBackdropMesh.material.map.needsUpdate = true;
+    }
 
     $('lamp-icon').innerText  = '🌙';
     $('lamp-label').innerText = 'ВЫКЛЮЧИТЬ СВЕТ (Уложить спать)';
@@ -1029,7 +1443,9 @@ $('btn-lamp')?.addEventListener('click', () => {
     stopSleepZ();
     triggerSquashAndStretch();
   }
-});
+}
+
+$('btn-lamp')?.addEventListener('click', toggleBedroomLights);
 
 function startSleepZ() {
   stopSleepZ();
@@ -1038,17 +1454,15 @@ function startSleepZ() {
     const z = document.createElement('div');
     z.className = 'sleep-z';
     z.innerText = 'Z';
-    z.style.left = `${window.innerWidth / 2 + (Math.random() - 0.5) * 40}px`;
+    z.style.left = `${window.innerWidth / 2 - 40 + (Math.random() - 0.5) * 35}px`;
     z.style.top  = `${window.innerHeight * 0.38}px`;
     $('particles').appendChild(z);
 
     gsap.to(z, {
-      x: 30 + Math.random() * 40,
+      x: 35 + Math.random() * 40,
       y: -120 - Math.random() * 40,
-      fontSize: '36px',
-      opacity: 0,
-      duration: 2.2,
-      ease: 'power1.out',
+      fontSize: '36px', opacity: 0,
+      duration: 2.2, ease: 'power1.out',
       onComplete: () => z.remove()
     });
   }, 1200);
@@ -1061,7 +1475,7 @@ function stopSleepZ() {
   }
 }
 
-// ─── J. Комната 4: 🎮 ИГРОВАЯ (Пощекотать & Лови подарки) ─────────────────────
+// ─── J. ИГРОВАЯ: ЩЕКОТКА ──────────────────────────────────────────────────────
 $('btn-tickle')?.addEventListener('click', () => {
   safeHaptic('medium');
   triggerSquashAndStretch();
@@ -1075,79 +1489,243 @@ $('btn-tickle')?.addEventListener('click', () => {
   }
 });
 
-// Мини-игра «Лови подарки»
-let mgTimer = null, mgSpawn = null, mgScore = 0, mgLeft = 30;
+// ─── K. ВСТРОЕННАЯ АРКАДНАЯ МИНИ-ИГРА «ЛОВЕЦ СЧАСТЬЯ» ────────────────────────
+const arcadeModal = $('arcade-modal');
+const arcadeCanvas = $('arcade-canvas');
+let arcadeCtx = null;
+let arcadeAnimId = null;
+let arcadeBasket = { x: 150, y: 0, w: 70, h: 35 };
+let arcadeItems = [];
+let arcadeScore = 0;
+let arcadeLives = 3;
+let arcadeCoinsEarned = 0;
+let arcadeRunning = false;
+let arcadeLastSpawn = 0;
 
-function startMiniGame() {
+// Список падающих предметов
+const FALLING_TYPES = [
+  // Полезности (Good Items)
+  { emoji: '☕', pts: 10, coins: 1, type: 'good' },
+  { emoji: '🍕', pts: 15, coins: 2, type: 'good' },
+  { emoji: '💐', pts: 25, coins: 3, type: 'good' },
+  { emoji: '💖', pts: 20, coins: 2, type: 'good' },
+  { emoji: '🧁', pts: 15, coins: 2, type: 'good' },
+  { emoji: '💎', pts: 50, coins: 5, type: 'good' },
+  // Анти-бонусы (Bad Items)
+  { emoji: '⏰', pts: 0, coins: 0, type: 'bad' },
+  { emoji: '💔', pts: 0, coins: 0, type: 'bad' }
+];
+
+function openArcade() {
   safeHaptic('success');
-  mgScore = 0;
-  mgLeft  = 30;
-  $('mg-score').innerText = '0';
-  $('mg-timer').innerText = '30s';
-  $('minigame').classList.remove('hidden');
-  $('minigame').classList.add('flex');
-  $('mg-area').innerHTML = '';
-
-  mgTimer = setInterval(() => {
-    mgLeft--;
-    $('mg-timer').innerText = `${mgLeft}s`;
-    if (mgLeft <= 0) endMiniGame();
-  }, 1000);
-
-  mgSpawn = setInterval(spawnMGItem, 750);
+  arcadeModal.classList.remove('hidden');
+  arcadeModal.classList.add('flex');
+  $('arcade-intro').classList.remove('hidden');
+  resizeArcadeCanvas();
 }
 
-function spawnMGItem() {
-  const area = $('mg-area');
-  if (!area) return;
-
-  const item = document.createElement('div');
-  item.className = 'absolute cursor-pointer text-4xl select-none active:scale-125 transition-transform';
-  item.innerText = ['💖', '🎁', '🍰', '⭐', '🍕', '🎀'][Math.floor(Math.random() * 6)];
-  item.style.left = `${20 + Math.random() * (window.innerWidth - 80)}px`;
-  item.style.top  = '-50px';
-  area.appendChild(item);
-
-  const tween = gsap.to(item, {
-    top: window.innerHeight * 0.65,
-    duration: 2.0 + Math.random() * 1.5,
-    ease: 'none',
-    onComplete: () => item.remove()
-  });
-
-  item.addEventListener('pointerdown', (e) => {
-    e.stopPropagation();
-    tween.kill();
-    safeHaptic('light');
-    playSfx('tap');
-    mgScore += 10;
-    $('mg-score').innerText = mgScore;
-    gsap.to(item, { scale: 1.5, opacity: 0, duration: 0.2, onComplete: () => item.remove() });
-  });
+function resizeArcadeCanvas() {
+  if (!arcadeCanvas) return;
+  arcadeCanvas.width = arcadeCanvas.parentElement.clientWidth;
+  arcadeCanvas.height = arcadeCanvas.parentElement.clientHeight;
+  arcadeBasket.y = arcadeCanvas.height - 45;
+  arcadeBasket.x = arcadeCanvas.width / 2 - arcadeBasket.w / 2;
+  arcadeCtx = arcadeCanvas.getContext('2d');
 }
 
-function endMiniGame() {
-  clearInterval(mgTimer);
-  clearInterval(mgSpawn);
-  safeHaptic('success');
+function startArcadeGame() {
+  $('arcade-intro').classList.add('hidden');
+  arcadeScore = 0;
+  arcadeLives = 3;
+  arcadeCoinsEarned = 0;
+  arcadeItems = [];
+  arcadeRunning = true;
+  arcadeLastSpawn = Date.now();
+
+  $('arcade-score').innerText = '0';
+  $('arcade-coins-earned').innerText = '0';
+  renderArcadeLives();
+
+  if (arcadeAnimId) cancelAnimationFrame(arcadeAnimId);
+  arcadeLoop();
+}
+
+function renderArcadeLives() {
+  const container = $('arcade-lives');
+  if (!container) return;
+  let html = '';
+  for (let i = 0; i < 3; i++) {
+    html += i < arcadeLives ? '<span class="text-lg">❤️</span>' : '<span class="text-lg opacity-30">🖤</span>';
+  }
+  container.innerHTML = html;
+}
+
+// Управление корзинкой тачем/мышью
+const onArcadeDrag = (e) => {
+  if (!arcadeRunning) return;
+  const rect = arcadeCanvas.getBoundingClientRect();
+  const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+  const x = clientX - rect.left;
+  arcadeBasket.x = Math.max(0, Math.min(arcadeCanvas.width - arcadeBasket.w, x - arcadeBasket.w / 2));
+};
+arcadeCanvas.addEventListener('mousemove', onArcadeDrag);
+arcadeCanvas.addEventListener('touchmove', onArcadeDrag, { passive: true });
+
+function arcadeLoop() {
+  if (!arcadeRunning) return;
+  arcadeAnimId = requestAnimationFrame(arcadeLoop);
+
+  const now = Date.now();
+  arcadeCtx.clearRect(0, 0, arcadeCanvas.width, arcadeCanvas.height);
+
+  // Спавн новых предметов каждые 650мс
+  if (now - arcadeLastSpawn > 650) {
+    const itemType = FALLING_TYPES[Math.floor(Math.random() * FALLING_TYPES.length)];
+    arcadeItems.push({
+      x: 20 + Math.random() * (arcadeCanvas.width - 50),
+      y: -20,
+      speed: 3.2 + Math.random() * 2.0 + (arcadeScore * 0.015),
+      ...itemType
+    });
+    arcadeLastSpawn = now;
+  }
+
+  // Обновление и отрисовка падающих предметов
+  for (let i = arcadeItems.length - 1; i >= 0; i--) {
+    const item = arcadeItems[i];
+    item.y += item.speed;
+
+    // Рисуем эмодзи
+    arcadeCtx.font = '28px sans-serif';
+    arcadeCtx.textAlign = 'center';
+    arcadeCtx.fillText(item.emoji, item.x, item.y);
+
+    // Проверка коллизии с корзинкой
+    const caught = (
+      item.y >= arcadeBasket.y - 10 &&
+      item.y <= arcadeBasket.y + arcadeBasket.h &&
+      item.x >= arcadeBasket.x - 15 &&
+      item.x <= arcadeBasket.x + arcadeBasket.w + 15
+    );
+
+    if (caught) {
+      if (item.type === 'good') {
+        playSfx('catch');
+        safeHaptic('light');
+        arcadeScore += item.pts;
+        arcadeCoinsEarned += item.coins;
+        $('arcade-score').innerText = arcadeScore;
+        $('arcade-coins-earned').innerText = arcadeCoinsEarned;
+      } else {
+        // Попадание анти-бонуса
+        playSfx('hurt');
+        safeHaptic('warning');
+        arcadeLives--;
+        renderArcadeLives();
+        if (arcadeLives <= 0) {
+          endArcadeGame();
+          return;
+        }
+      }
+      arcadeItems.splice(i, 1);
+      continue;
+    }
+
+    // Упал за экран
+    if (item.y > arcadeCanvas.height + 30) {
+      arcadeItems.splice(i, 1);
+    }
+  }
+
+  // Отрисовка сумочки / корзинки
+  arcadeCtx.font = '36px sans-serif';
+  arcadeCtx.textAlign = 'center';
+  arcadeCtx.fillText('🧺', arcadeBasket.x + arcadeBasket.w / 2, arcadeBasket.y + 24);
+}
+
+function endArcadeGame() {
+  arcadeRunning = false;
+  if (arcadeAnimId) cancelAnimationFrame(arcadeAnimId);
+
   playSfx('fanfare');
+  safeHaptic('success');
 
+  // Начисляем монетки любви и восстанавливаем веселье на 100%
   petState.fun = 100;
-  petState.coins += mgScore;
+  petState.coins += arcadeCoinsEarned;
   saveState();
 
-  confetti({ particleCount: 70, spread: 60, origin: { y: 0.6 } });
-  setTimeout(() => alert(`🎉 Игра окончена!\nТы набрала ${mgScore} очков!\nНастроение Лёли 100%! ✨`), 100);
+  confetti({ particleCount: 90, spread: 70, origin: { y: 0.6 } });
 
-  $('minigame').classList.add('hidden');
-  $('minigame').classList.remove('flex');
-  $('mg-area').innerHTML = '';
+  setTimeout(() => {
+    alert(`🎉 Игра окончена!\nНабрано очков: ${arcadeScore}!\nЗаработано монеток любви: +${arcadeCoinsEarned} 🪙\nНастроение Лёли 100%! ✨`);
+    arcadeModal.classList.add('hidden');
+    arcadeModal.classList.remove('flex');
+  }, 200);
 }
 
-$('btn-minigame')?.addEventListener('click', startMiniGame);
-$('mg-exit')?.addEventListener('click', endMiniGame);
+$('btn-start-arcade')?.addEventListener('click', openArcade);
+$('btn-start-game-now')?.addEventListener('click', startArcadeGame);
+$('btn-close-arcade')?.addEventListener('click', () => {
+  arcadeRunning = false;
+  if (arcadeAnimId) cancelAnimationFrame(arcadeAnimId);
+  arcadeModal.classList.add('hidden');
+  arcadeModal.classList.remove('flex');
+});
 
-// ─── K. Реакции парня и кнопка «Симулировать ❤️ от парня» ────────────────────
+// ─── L. МАГАЗИН УЮТА (СМЕНА ОБОЕВ В 3D) ──────────────────────────────────────
+const shopModal = $('shop-modal');
+$('btn-open-shop')?.addEventListener('click', () => {
+  shopModal.classList.remove('hidden');
+  shopModal.classList.add('flex');
+  safeHaptic('light');
+});
+$('btn-close-shop')?.addEventListener('click', () => {
+  shopModal.classList.add('hidden');
+  shopModal.classList.remove('flex');
+});
+
+const THEME_PALETTES = {
+  pink:     { c1: '#fff1f2', c2: '#fce7f3', bg: 0xfce7f3 },
+  mint:     { c1: '#f0fdf4', c2: '#dcfce7', bg: 0xdcfce7 },
+  lavender: { c1: '#faf5ff', c2: '#f3e8ff', bg: 0xf3e8ff },
+  gold:     { c1: '#fffbeb', c2: '#fef3c7', bg: 0xfef3c7 }
+};
+
+document.querySelectorAll('.btn-theme-apply').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const theme = btn.dataset.theme;
+    const cost = parseInt(btn.dataset.cost) || 0;
+
+    if (cost > 0 && petState.coins < cost) {
+      safeHaptic('error');
+      alert('Недостаточно монеток любви! Заработай их в мини-игре 🎮');
+      return;
+    }
+
+    if (cost > 0) {
+      petState.coins -= cost;
+      saveState();
+    }
+
+    safeHaptic('success');
+    playSfx('fanfare');
+
+    // Обновляем текстуру стен в Three.js
+    const pal = THEME_PALETTES[theme] || THEME_PALETTES.pink;
+    const newWallMat = createWallMaterial(pal.c1, pal.c2);
+    if (roomBackWall)  roomBackWall.material = newWallMat;
+    if (roomLeftWall)  roomLeftWall.material = newWallMat;
+    if (roomRightWall) roomRightWall.material = newWallMat;
+    if (scene) scene.background = new THREE.Color(pal.bg);
+
+    shopModal.classList.add('hidden');
+    shopModal.classList.remove('flex');
+    updateSpeech('Какая красота! Спасибо за новый уют в комнате! ✨💖');
+  });
+});
+
+// ─── M. РЕАКЦИИ ПАРНЯ И КНОПКА «СИМУЛИРОВАТЬ ❤️» ─────────────────────────────
 async function pollReactions() {
   try {
     const res = await fetch('/api/reactions');
@@ -1170,9 +1748,7 @@ function showGiftCelebration(gift) {
   saveState();
 
   confetti({
-    particleCount: 120,
-    spread: 90,
-    origin: { y: 0.55 },
+    particleCount: 120, spread: 90, origin: { y: 0.55 },
     colors: ['#f43f5e', '#ec4899', '#fb7185', '#fda4af', '#fef08a']
   });
 
@@ -1189,12 +1765,11 @@ function showGiftCelebration(gift) {
 
 $('gift-close')?.addEventListener('click', () => {
   safeHaptic('light');
-  const modal = $('gift-modal');
-  modal.classList.add('hidden');
-  modal.classList.remove('flex');
+  $('gift-modal').classList.add('hidden');
+  $('gift-modal').classList.remove('flex');
 });
 
-// Кнопка «Симулировать ❤️ от парня» в верхнем HUD
+// Кнопка быстрой эмуляции в верхнем хедере
 $('btn-quick-sim')?.addEventListener('click', async () => {
   safeHaptic('medium');
   const gifts = ['gift:pet', 'gift:food', 'gift:kiss'];
@@ -1212,7 +1787,7 @@ $('btn-quick-sim')?.addEventListener('click', async () => {
   }
 });
 
-// ─── Вспомогательные функции частиц ──────────────────────────────────────────
+// ─── Вспомогательные частицы ──────────────────────────────────────────────────
 function spawnHeart(x, y) {
   const overlay = $('particles');
   if (!overlay) return;
@@ -1224,12 +1799,8 @@ function spawnHeart(x, y) {
   overlay.appendChild(h);
 
   gsap.to(h, {
-    y: -90 - Math.random() * 50,
-    x: (Math.random() - 0.5) * 40,
-    opacity: 0,
-    duration: 1.4,
-    ease: 'power1.out',
-    onComplete: () => h.remove()
+    y: -90 - Math.random() * 50, x: (Math.random() - 0.5) * 40, opacity: 0,
+    duration: 1.4, ease: 'power1.out', onComplete: () => h.remove()
   });
 }
 
@@ -1245,11 +1816,7 @@ function spawnFloatingText(text, x, y) {
   overlay.appendChild(tag);
 
   gsap.to(tag, {
-    y: -60,
-    scale: 1.3,
-    opacity: 0,
-    duration: 1.2,
-    ease: 'power1.out',
+    y: -60, scale: 1.3, opacity: 0, duration: 1.2, ease: 'power1.out',
     onComplete: () => tag.remove()
   });
 }
@@ -1259,6 +1826,8 @@ document.addEventListener('DOMContentLoaded', () => {
   updateHUD();
   initThreeScene();
   pollReactions();
+  // По умолчанию стартуем в уютной Кухне
+  switchRoom('kitchen');
 });
 </script>
 </body>

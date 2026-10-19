@@ -351,24 +351,53 @@ def action():
 
         msg = "Действие выполнено!"
         if act == "feed":
-            food_bonus = {"pizza": 25.0, "apple": 15.0, "cake": 30.0, "coffee": 5.0}
-            gain = food_bonus.get(data.get("food", "pizza"), 20.0)
+            food_bonus = {
+                "pizza": 25.0, "apple": 15.0, "cake": 30.0,
+                "coffee": 5.0, "croissant": 20.0, "watermelon": 15.0, "icecream": 20.0
+            }
+            food_type = data.get("food", "pizza")
+            gain = food_bonus.get(food_type, 20.0)
             s.hunger = min(100.0, s.hunger + gain)
-            if data.get("food") == "coffee":
+            if food_type == "coffee":
                 s.energy = min(100.0, s.energy + 10.0)
+            elif food_type == "watermelon":
+                s.hygiene = min(100.0, s.hygiene + 5.0)
+            elif food_type == "icecream":
+                s.fun = min(100.0, s.fun + 10.0)
+            s.coins = (s.coins or 0) + 2
             msg = "Лёля с аппетитом покушала! 🍰😋"
+
         elif act == "wash":
             s.hygiene = min(100.0, s.hygiene + 25.0)
             msg = "Лёля сияет чистотой! 🧼✨"
+
         elif act == "shower":
             s.hygiene = 100.0
+            s.coins = (s.coins or 0) + 5
             msg = "Освежающий душ! 🚿💖"
+
         elif act == "sleep_toggle":
             s.is_sleeping = not s.is_sleeping
             msg = "Лёля уснула 🌙💤" if s.is_sleeping else "Лёля проснулась! ☀️"
+
         elif act in ("play", "pet", "tickle"):
             s.fun = min(100.0, s.fun + 18.0)
+            s.coins = (s.coins or 0) + 3
             msg = "Лёля весело хихикает! 🎮🥰"
+
+        elif act == "minigame":
+            coins_earned = max(0, int(data.get("coins", 10)))
+            s.coins = (s.coins or 0) + coins_earned
+            s.fun = 100.0
+            msg = f"Отличная игра! Заработано +{coins_earned} монеток любви! 🎁✨"
+
+        elif act == "buy_wallpaper":
+            cost = int(data.get("cost", 30))
+            if (s.coins or 0) >= cost:
+                s.coins -= cost
+                msg = "Новые обои успешно разблокированы! 🎨✨"
+            else:
+                return jsonify({"status": "error", "message": "Недостаточно монеток!"}), 400
 
         s.last_update = time.time() * 1000.0
         db.commit()
