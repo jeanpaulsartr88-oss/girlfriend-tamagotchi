@@ -46,3 +46,8 @@ Thumbs.db
 
 # 3D Backups
 static/models/*_orig.glb
+
+# AI Voice Models (Weights for Colab)
+voice_model/
+*.pth
+*.index

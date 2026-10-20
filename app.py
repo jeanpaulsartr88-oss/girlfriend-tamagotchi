@@ -22,7 +22,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 import requests
-from flask import Flask, request, jsonify, render_template
+from flask import Flask, request, jsonify, render_template, Response
 from sqlalchemy import (
     create_engine, Column, Integer, Float, Boolean, DateTime, String, Text
 )
@@ -428,6 +428,37 @@ def telegram_webhook():
         cb = upd["callback_query"]
         apply_gift_reaction(cb.get("data", "gift:pet"))
     return jsonify({"ok": True}), 200
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Проксирование аудио в Colab RVC голосовой клон
+# ──────────────────────────────────────────────────────────────────────────────
+COLAB_RVC_URL = os.getenv(
+    "COLAB_RVC_URL",
+    "https://medication-provide-saving-humanitarian.trycloudflare.com/convert"
+)
+
+@app.route('/api/repeat_voice', methods=['POST'])
+def repeat_voice():
+    if 'audio' not in request.files:
+        return jsonify({'error': 'No audio file provided'}), 400
+    
+    audio_file = request.files['audio']
+    try:
+        files = {
+            'audio': (
+                audio_file.filename or 'input.wav',
+                audio_file.read(),
+                audio_file.content_type or 'audio/wav'
+            )
+        }
+        resp = requests.post(COLAB_RVC_URL, files=files, timeout=60)
+        if resp.status_code == 200:
+            return Response(resp.content, mimetype="audio/wav")
+        else:
+            return jsonify({'error': f"Colab error: {resp.text}"}), 502
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 
 # ──────────────────────────────────────────────────────────────────────────────
