@@ -437,6 +437,9 @@ COLAB_RVC_URL = os.getenv(
     "COLAB_RVC_URL",
     "https://medication-provide-saving-humanitarian.trycloudflare.com/convert"
 )
+VOICE_MODEL_DIR = os.path.join(os.path.dirname(__file__), "voice_model")
+PTH_PATH = os.path.join(VOICE_MODEL_DIR, "her_voice.pth")
+INDEX_PATH = os.path.join(VOICE_MODEL_DIR, "her_voice.index")
 
 @app.route('/api/repeat_voice', methods=['POST'])
 def repeat_voice():
@@ -445,6 +448,23 @@ def repeat_voice():
     
     audio_file = request.files['audio']
     try:
+        # Параметры RVC для естественного женского тембра (убираем мультяшность)
+        f0_up_key = request.form.get("f0_up_key", request.args.get("f0_up_key", "5"))
+        index_rate = request.form.get("index_rate", request.args.get("index_rate", "0.9"))
+        filter_radius = request.form.get("filter_radius", request.args.get("filter_radius", "3"))
+        rms_mix_rate = request.form.get("rms_mix_rate", request.args.get("rms_mix_rate", "0.25"))
+        protect = request.form.get("protect", request.args.get("protect", "0.33"))
+
+        payload = {
+            "f0_up_key": f0_up_key,
+            "f0up_key": f0_up_key,
+            "pitch": f0_up_key,
+            "index_rate": index_rate,
+            "filter_radius": filter_radius,
+            "rms_mix_rate": rms_mix_rate,
+            "protect": protect
+        }
+
         files = {
             'audio': (
                 audio_file.filename or 'input.wav',
@@ -452,7 +472,13 @@ def repeat_voice():
                 audio_file.content_type or 'audio/wav'
             )
         }
-        resp = requests.post(COLAB_RVC_URL, files=files, timeout=60)
+        resp = requests.post(
+            COLAB_RVC_URL,
+            files=files,
+            data=payload,
+            params=payload,
+            timeout=60
+        )
         if resp.status_code == 200:
             return Response(resp.content, mimetype="audio/wav")
         else:
