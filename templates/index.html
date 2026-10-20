@@ -709,7 +709,7 @@ let smoothedVolume = 0;
 let isBlinking = false;
 let pointer = { x: 0, y: 0 };
 let targetPointer = { x: 0, y: 0 };
-const cameraLookTarget = { x: 0, y: 0.90, z: 0 };
+const cameraLookTarget = new THREE.Vector3(0, 1.05, 0);
 
 // 4 комнаты: разделение по оси X с кинематографичными ракурсами камеры
 const ROOM_CONFIGS = {
