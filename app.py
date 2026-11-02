@@ -33,7 +33,7 @@ from sqlalchemy.orm import declarative_base, sessionmaker, scoped_session
 # ──────────────────────────────────────────────────────────────────────────────
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
 TELEGRAM_CHAT_ID   = os.getenv("TELEGRAM_CHAT_ID", "").strip()
-PORT               = int(os.getenv("PORT", 8000))
+PORT               = int(os.getenv("PORT", 5000))
 
 # По умолчанию в локальном запуске MOCK_MODE = True
 # Никаких автоматических вызовов setWebhook или getUpdates при старте сервера!
@@ -431,15 +431,10 @@ def telegram_webhook():
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# Проксирование аудио в Colab RVC голосовой клон
+# Проксирование аудио в локальный RVC голосовой сервис (http://127.0.0.1:5050/convert)
 # ──────────────────────────────────────────────────────────────────────────────
-COLAB_RVC_URL = os.getenv(
-    "COLAB_RVC_URL",
-    "https://medication-provide-saving-humanitarian.trycloudflare.com/convert"
-)
-VOICE_MODEL_DIR = os.path.join(os.path.dirname(__file__), "voice_model")
-PTH_PATH = os.path.join(VOICE_MODEL_DIR, "her_voice.pth")
-INDEX_PATH = os.path.join(VOICE_MODEL_DIR, "her_voice.index")
+LOCAL_RVC_URL = os.getenv("LOCAL_RVC_URL", "http://127.0.0.1:5050/convert")
+LOCAL_RVC_TIMEOUT = float(os.getenv("LOCAL_RVC_TIMEOUT", "30.0"))
 
 @app.route('/api/repeat_voice', methods=['POST'])
 def repeat_voice():
@@ -448,17 +443,49 @@ def repeat_voice():
     
     audio_file = request.files['audio']
     try:
-        # Параметры RVC для естественного женского тембра (убираем мультяшность)
-        f0_up_key = request.form.get("f0_up_key", request.args.get("f0_up_key", "5"))
-        index_rate = request.form.get("index_rate", request.args.get("index_rate", "0.9"))
-        filter_radius = request.form.get("filter_radius", request.args.get("filter_radius", "3"))
-        rms_mix_rate = request.form.get("rms_mix_rate", request.args.get("rms_mix_rate", "0.25"))
-        protect = request.form.get("protect", request.args.get("protect", "0.33"))
+        raw_bytes = audio_file.read()
+        print(f"[FLASK] Получено аудио от клиента ({len(raw_bytes)} байт)")
+
+        # Режим повторялки: по умолчанию passthrough / direct_echo (чистое оригинальное эхо без искажений)
+        mode = request.form.get("mode", request.args.get("mode", "passthrough")).strip().lower()
+        use_rvc_val = str(request.form.get("use_rvc", request.args.get("use_rvc", "false"))).strip().lower()
+        use_rvc = use_rvc_val in ("1", "true", "yes") or mode == "rvc"
+
+        # ── 1. РЕЖИМ ЧЕСТНОЙ ПОВТОРЯЛКИ (PASSTHROUGH ECHO) ПО УМОЛЧАНИЮ ──
+        if not use_rvc:
+            print("[FLASK] Режим 'Pass-through Echo': мгновенный возврат оригинального голоса без искажений.")
+            
+            # Если передан чистый WAV (заголовок RIFF....WAVE), возвращаем сразу
+            if len(raw_bytes) >= 12 and raw_bytes[:4] == b'RIFF' and raw_bytes[8:12] == b'WAVE':
+                return Response(raw_bytes, mimetype="audio/wav")
+            
+            # Иначе перекодируем через soundfile в чистый PCM 16-bit WAV
+            try:
+                import io
+                import soundfile as sf
+                data, samplerate = sf.read(io.BytesIO(raw_bytes))
+                out_io = io.BytesIO()
+                sf.write(out_io, data, samplerate, format='WAV', subtype='PCM_16')
+                return Response(out_io.getvalue(), mimetype="audio/wav")
+            except Exception as conv_err:
+                print(f"[FLASK] Предупреждение soundfile ({conv_err}), возврат raw_bytes")
+                content_type = audio_file.content_type or "audio/wav"
+                return Response(raw_bytes, mimetype=content_type)
+
+        # ── 2. РЕЗЕРВНЫЙ КОНВЕЙЕР RVC (ЕСЛИ ЯВНО ПЕРЕДАН use_rvc: true) ──
+        print(f"[FLASK] Режим RVC активирован, отправка на {LOCAL_RVC_URL}...")
+        f0_up_key = request.form.get("f0_up_key", request.args.get("f0_up_key", "12"))
+        f0_method = request.form.get("f0_method", request.args.get("f0_method", "rmvpe"))
+        index_rate = request.form.get("index_rate", request.args.get("index_rate", "0.45"))
+        filter_radius = request.form.get("filter_radius", request.args.get("filter_radius", "5"))
+        rms_mix_rate = request.form.get("rms_mix_rate", request.args.get("rms_mix_rate", "0.0"))
+        protect = request.form.get("protect", request.args.get("protect", "0.5"))
 
         payload = {
             "f0_up_key": f0_up_key,
             "f0up_key": f0_up_key,
             "pitch": f0_up_key,
+            "f0_method": f0_method,
             "index_rate": index_rate,
             "filter_radius": filter_radius,
             "rms_mix_rate": rms_mix_rate,
@@ -468,23 +495,31 @@ def repeat_voice():
         files = {
             'audio': (
                 audio_file.filename or 'input.wav',
-                audio_file.read(),
+                raw_bytes,
                 audio_file.content_type or 'audio/wav'
             )
         }
         resp = requests.post(
-            COLAB_RVC_URL,
+            LOCAL_RVC_URL,
             files=files,
             data=payload,
-            params=payload,
-            timeout=60
+            timeout=LOCAL_RVC_TIMEOUT
         )
-        if resp.status_code == 200:
+        print("[FLASK] Ответ от RVC:", resp.status_code)
+
+        if resp.status_code == 200 and 'audio' in resp.headers.get('content-type', ''):
+            print(f"[FLASK] Успешная конвертация RVC: получено {len(resp.content)} байт WAV.")
             return Response(resp.content, mimetype="audio/wav")
         else:
-            return jsonify({'error': f"Colab error: {resp.text}"}), 502
+            print(f"[FLASK] Ошибка ответа RVC {resp.status_code}: {resp.text[:200]}")
+            # Откат на чистый оригинал при ошибке RVC
+            return Response(raw_bytes, mimetype="audio/wav")
+    except (requests.exceptions.RequestException, requests.exceptions.Timeout) as e:
+        print(f"[FLASK] RVC недоступен ({e}), возврат оригинального аудио")
+        return Response(raw_bytes, mimetype="audio/wav")
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        print(f"[FLASK] Ошибка в repeat_voice ({e}), возврат оригинального аудио")
+        return Response(raw_bytes, mimetype="audio/wav")
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -522,9 +557,21 @@ except ImportError:
 
 
 if __name__ == "__main__":
+    use_ssl = os.getenv("USE_SSL", "false").lower() in ("true", "1", "yes")
+    ssl_context = None
+    protocol = "http"
+    if use_ssl and os.path.exists("cert.pem") and os.path.exists("key.pem"):
+        ssl_context = ("cert.pem", "key.pem")
+        protocol = "https"
+
     print("=" * 60)
     print("  Тамагочи Лёли — Сервер запущен")
-    print(f"  URL: http://127.0.0.1:{PORT}")
-    print(f"  Режим: {'MOCK_MODE (Локальный)' if MOCK_MODE else 'Live Telegram'}")
+    print(f"  Локальный URL (ПК):  {protocol}://localhost:{PORT}")
+    print(f"  В сети (Wi-Fi/LAN):  {protocol}://192.168.8.31:{PORT}")
+    print(f"  Режим:               {'MOCK_MODE (Локальный)' if MOCK_MODE else 'Live Telegram'}")
+    if protocol == "https":
+        print("  SSL (HTTPS):         ВКЛЮЧЕН (Микрофон доступен по сети Wi-Fi)")
+    else:
+        print("  Микрофон:            Открывайте http://localhost:5000 (разрешен без HTTPS)")
     print("=" * 60)
-    flask_app.run(host="0.0.0.0", port=PORT, debug=False, use_reloader=False)
+    flask_app.run(host="0.0.0.0", port=PORT, debug=False, use_reloader=False, ssl_context=ssl_context)

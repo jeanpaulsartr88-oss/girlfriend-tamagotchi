@@ -41,25 +41,35 @@
       background: #09090b;
     }
     .glass {
-      background: rgba(255, 255, 255, 0.88);
-      backdrop-filter: blur(14px);
-      -webkit-backdrop-filter: blur(14px);
-      border: 1px solid rgba(255, 255, 255, 0.75);
+      background: rgba(255, 255, 255, 0.70);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.45);
+      box-shadow: 0 8px 30px rgba(0, 0, 0, 0.08);
     }
     .glass-dark {
-      background: rgba(15, 23, 42, 0.82);
-      backdrop-filter: blur(14px);
-      -webkit-backdrop-filter: blur(14px);
+      background: rgba(15, 23, 42, 0.70);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
       border: 1px solid rgba(255, 255, 255, 0.15);
     }
 
-    /* Talking Tom Circular Gauge */
+    /* Talking Tom Circular Gauge (Компактный стиль) */
     .gauge-circle {
       position: relative;
-      width: 58px; height: 58px;
+      width: 52px; height: 52px;
       display: flex; align-items: center; justify-content: center;
       border-radius: 9999px;
       transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+    .dragged-food-item {
+      position: fixed;
+      pointer-events: none;
+      z-index: 9999;
+      transform: translate(-50%, -50%);
+      user-select: none;
+      touch-action: none;
+      filter: drop-shadow(0 12px 20px rgba(0, 0, 0, 0.35));
     }
     .gauge-svg {
       position: absolute;
@@ -190,6 +200,9 @@
   <!-- Three.js Canvas Container -->
   <div id="canvas-wrap" class="w-full h-full relative cursor-grab active:cursor-grabbing"></div>
 
+  <!-- Полноэкранный плавный переход затемнения для сна/пробуждения -->
+  <div id="room-fade-overlay" class="pointer-events-none fixed inset-0 z-50 bg-black opacity-0"></div>
+
   <!-- Слой частиц: вода, пузыри, сердечки, Z-z-z -->
   <div id="particles" class="absolute inset-0 pointer-events-none overflow-hidden z-25"></div>
 
@@ -198,9 +211,8 @@
 
   <!-- Индикатор пены в ванной -->
   <div id="foam-hud" class="absolute top-16 left-1/2 -translate-x-1/2 z-20 hidden items-center gap-2 bg-black/60 backdrop-blur-md px-3 py-1.5 rounded-full text-white text-[11px] font-black border border-white/20">
-    <span>🫧 Пена:</span>
-    <span id="foam-count-txt" class="text-cyan-300">0</span>
-    <span class="text-gray-300">/ 15</span>
+    <span>🫧 Пена на теле:</span>
+    <span id="foam-count-txt" class="text-cyan-300 font-bold">0</span>
   </div>
 
   <!-- Подсказка кликабельности лампы в спальне -->
@@ -473,11 +485,18 @@
 const $ = (id) => document.getElementById(id);
 
 // Telegram WebApp инициализация
-const tg = window.Telegram?.WebApp;
-if (tg) {
-  tg.expand();
-  try { tg.enableClosingConfirmation(); } catch(_) {}
+if (window.Telegram && window.Telegram.WebApp) {
+  try {
+    window.Telegram.WebApp.ready();
+    window.Telegram.WebApp.expand();
+    if (typeof window.Telegram.WebApp.enableClosingConfirmation === 'function') {
+      window.Telegram.WebApp.enableClosingConfirmation();
+    }
+  } catch (e) {
+    console.warn('[Telegram WebApp] Init warning:', e);
+  }
 }
+const tg = window.Telegram?.WebApp;
 
 function safeHaptic(style = 'light') {
   try {
@@ -692,60 +711,72 @@ let scene, camera, renderer, clock;
 let charGroup = null;
 let contactShadowMesh = null;
 const baseY = 0;
-const baseScale = 1.45;
+const baseScale = 1.05;
 
-// Кости Mixamo
+// Кости Mixamo и ссылки на морфы
 const bones = {
   head: null, neck: null, spine: null, chest: null, hips: null,
   leftShoulder: null, rightShoulder: null,
   leftArm: null, rightArm: null,
   leftForeArm: null, rightForeArm: null,
+  leftHand: null, rightHand: null,
   leftUpLeg: null, rightUpLeg: null,
   leftLeg: null, rightLeg: null,
   jaw: null
 };
+window.bones = bones;
 
+let characterMesh = null;
+let characterLegs = null;
+let currentArmPoseMode = 'standing';
+let armLiftAmount = 0;
+let nextBlinkTimer = null;
+let morphMouthIndex = -1;
+let morphEyeBlinkIndex = -1;
+let mixer = null;
+const initialBoneRots = {};
 let smoothedVolume = 0;
 let isBlinking = false;
 let pointer = { x: 0, y: 0 };
 let targetPointer = { x: 0, y: 0 };
-const cameraLookTarget = new THREE.Vector3(0, 1.05, 0);
+const cameraLookTarget = new THREE.Vector3(0, 0.62, 0);
 
-// 4 комнаты: разделение по оси X с кинематографичными ракурсами камеры
+// 4 комнаты: индивидуальная настройка камеры и положения персонажа (Talking Tom style)
 const ROOM_CONFIGS = {
   living: {
     name: 'Гостиная',
     xOffset: 0,
-    camPos: { x: 0, y: 1.15, z: 1.80 },
-    lookAt: { x: 0, y: 1.05, z: 0 },
-    charPos: { x: 0, y: 0, z: 0 }
+    camPos: { x: 0, y: 0.96, z: 2.80 },
+    lookAt: { x: 0, y: 0.62, z: 0 },
+    charPos: { x: 0, y: 0.04, z: 0 }
   },
   kitchen: {
     name: 'Кухня',
     xOffset: 14,
-    camPos: { x: 14.0, y: 1.05, z: 1.65 },
-    lookAt: { x: 14.0, y: 0.95, z: 0.15 },
-    charPos: { x: 14, y: -0.20, z: 0.15 }
+    camPos: { x: 14.0, y: 1.15, z: 1.85 },
+    lookAt: { x: 14.0, y: 0.82, z: 0.28 },
+    charPos: { x: 14.0, y: -0.06, z: 0.18 }
   },
   bathroom: {
     name: 'Ванная',
     xOffset: 28,
-    camPos: { x: 28.0, y: 1.15, z: 1.95 },
-    lookAt: { x: 28.0, y: 0.95, z: 0 },
-    charPos: { x: 28, y: 0.02, z: 0 }
+    camPos: { x: 28.0, y: 1.05, z: 2.30 },
+    lookAt: { x: 28.0, y: 0.70, z: 0 },
+    charPos: { x: 28.0, y: 0.08, z: 0 }
   },
   bedroom: {
     name: 'Спальня',
     xOffset: 42,
-    camPos: { x: 42.0, y: 1.15, z: 2.10 },
-    lookAt: { x: 42.0, y: 0.95, z: 0.20 },
-    charPos: { x: 42, y: 0, z: 0.70 }
+    camPos: { x: 42.0, y: 0.96, z: 2.80 },
+    lookAt: { x: 42.0, y: 0.62, z: 0.60 },
+    charPos: { x: 42.0, y: 0.04, z: 0.60 }
   }
 };
 
 let currentRoom = 'living';
 
 // Источники света по комнатам
+let ambientLight = null, mainDirLight = null;
 let livingSunLight, livingRimLight;
 let kitchenSconceLight;
 let bathroomDiffusedLight;
@@ -758,15 +789,13 @@ let activeBathroomTool = null; // 'sponge' | 'shower' | null
 let waterParticlesMesh = null;
 let waterDropsData = [];
 
-// PBR материал пены (нежная полупрозрачная мыльная пена)
-const foamMaterial = new THREE.MeshPhysicalMaterial({
+// Полупрозрачный PBR материал пены (белые пузырьки, opacity: 0.85, roughness: 0.1)
+const foamMaterial = new THREE.MeshStandardMaterial({
   color: 0xffffff,
   roughness: 0.1,
-  transmission: 0.85,
-  thickness: 0.1,
-  ior: 1.33,
-  clearcoat: 0.8,
-  clearcoatRoughness: 0.1
+  metalness: 0.05,
+  transparent: true,
+  opacity: 0.85
 });
 
 // Создание мягкой контактной тени под персонажем
@@ -795,36 +824,43 @@ function initThreeScene() {
   const H = wrap.clientHeight || window.innerHeight * 0.6;
 
   scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x18181b); // Тёмный кинематографичный фон за пределами комнат
+  scene.background = new THREE.Color(0xdad2c7); // Убираем ослепляющий белый фон сцены
   clock = new THREE.Clock();
 
   // Камера: крупный выразительный план (65-75% экрана в стиле Talking Tom)
   camera = new THREE.PerspectiveCamera(38, W / H, 0.1, 100);
-  camera.position.set(0, 1.15, 1.80);
-  cameraLookTarget.set(0, 1.05, 0);
+  camera.position.set(ROOM_CONFIGS.living.camPos.x, ROOM_CONFIGS.living.camPos.y, ROOM_CONFIGS.living.camPos.z);
+  cameraLookTarget.set(ROOM_CONFIGS.living.lookAt.x, ROOM_CONFIGS.living.lookAt.y, ROOM_CONFIGS.living.lookAt.z);
+
+  window.camera = camera;
+  window.cameraLookTarget = cameraLookTarget;
+  window.ROOM_CONFIGS = ROOM_CONFIGS;
 
   renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: 'high-performance' });
   renderer.setSize(W, H);
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 
-  // Освещение и цветовая палитра Talking Tom: чистый сочный карамельный цвет
+  // Тономаппинг и цветовое пространство
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.15; // Сочный карамельный свет Talking Tom
-  if (THREE.SRGBColorSpace) {
-    renderer.outputColorSpace = THREE.SRGBColorSpace;
-  } else {
-    renderer.outputEncoding = THREE.sRGBEncoding;
-  }
+  renderer.toneMappingExposure = 1.0;
 
   // Мягкие реалистичные тени без артефактов
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   wrap.appendChild(renderer.domElement);
 
-  // Основной мягкий студийный свет Talking Tom (теплый свет сверху, мягкий отскок снизу)
-  const hemiLight = new THREE.HemisphereLight(0xfff8e7, 0x8a9ba8, 1.2);
-  hemiLight.position.set(0, 20, 0);
-  scene.add(hemiLight);
+  // Основной свет - теплый рассеянный заполняющий свет (0.65)
+  ambientLight = new THREE.AmbientLight(0xfff1e6, 0.65);
+  scene.add(ambientLight);
+
+  // Направленный свет (0.55, позиция 2, 6, 4)
+  mainDirLight = new THREE.DirectionalLight(0xffffff, 0.55);
+  mainDirLight.position.set(2, 6, 4);
+  mainDirLight.target.position.set(0, 1.0, 0);
+  mainDirLight.castShadow = false;
+  scene.add(mainDirLight);
+  scene.add(mainDirLight.target);
 
   // Мягкая контактная тень под ногами персонажа
   contactShadowMesh = createContactShadow();
@@ -851,43 +887,43 @@ function buildLivingRoom(ox) {
   const group = new THREE.Group();
   group.position.x = ox;
 
-  // 1. Пол: теплый паркет с рельефом
+  // 1. Пол: древесный матовый оттенок (#8c6f56, roughness: 0.9)
   const floorGeo = new THREE.PlaneGeometry(5.2, 4.4);
-  const floorMat = createWoodFloorMaterial('#d97706', '#92400e');
+  const floorMat = createWoodFloorMaterial('#8c6f56', '#72553e');
   const floor = new THREE.Mesh(floorGeo, floorMat);
   floor.rotation.x = -Math.PI / 2;
   floor.position.y = baseY;
   floor.receiveShadow = true;
   group.add(floor);
 
-  // 2. Стены: розовая пастель
-  const wallMat = createWallPaperMaterial('#fdf2f4', '#fce7f3');
+  // 2. Стены: теплый латте (#d4c5b3, roughness: 0.9)
+  const wallMat = createWallPaperMaterial('#d4c5b3', '#c7b7a4');
   livingBackWallMesh = new THREE.Mesh(new THREE.PlaneGeometry(5.2, 3.6), wallMat);
   livingBackWallMesh.position.set(0, baseY + 1.8, -2.1);
   livingBackWallMesh.receiveShadow = true;
   group.add(livingBackWallMesh);
 
   // Плинтус
-  const baseboardMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.35 });
+  const baseboardMat = new THREE.MeshStandardMaterial({ color: 0x72553e, roughness: 0.9, metalness: 0.0 });
   const bb = new THREE.Mesh(new THREE.BoxGeometry(5.2, 0.12, 0.05), baseboardMat);
   bb.position.set(0, baseY + 0.06, -2.08);
   bb.receiveShadow = true;
   group.add(bb);
 
-  // 3. Уютный круглый ковер в центре комнаты
-  const rugGeo = new THREE.CircleGeometry(1.20, 36);
-  const rugMat = new THREE.MeshStandardMaterial({ color: 0xfff1f2, roughness: 0.85 });
+  // 3. Уютный круглый ковер в центре комнаты (матовый #b8a692, roughness: 0.9)
+  const rugGeo = new THREE.CircleGeometry(1.35, 36);
+  const rugMat = new THREE.MeshStandardMaterial({ color: 0xb8a692, roughness: 0.90, metalness: 0.0 });
   const rug = new THREE.Mesh(rugGeo, rugMat);
   rug.rotation.x = -Math.PI / 2;
   rug.position.set(0, baseY + 0.005, 0);
   rug.receiveShadow = true;
   group.add(rug);
 
-  // 4. НИЗКАЯ ТУМБА ПОД ТВ ИЗ СВЕТЛОГО ДЕРЕВА (СПРАВА У СТЕНЫ)
+  // 4. НИЗКАЯ ТУМБА ПОД ТВ ИЗ ДЕРЕВА
   const credenzaGroup = new THREE.Group();
   credenzaGroup.position.set(1.10, 0, -1.82);
 
-  const credenzaWoodMat = new THREE.MeshStandardMaterial({ color: 0xe2ba8a, roughness: 0.45 });
+  const credenzaWoodMat = new THREE.MeshStandardMaterial({ color: 0xb59d84, roughness: 0.85, metalness: 0.0 });
   const darkMetalMat = new THREE.MeshStandardMaterial({ color: 0x1f2937, metalness: 0.8, roughness: 0.2 });
 
   // Корпус тумбы (длина 1.45м, глубина 0.42м, высота 0.38м)
@@ -943,8 +979,8 @@ function buildLivingRoom(ox) {
   tvScreen.position.set(0, 0.88, 0.017);
   credenzaGroup.add(tvScreen);
 
-  // Мягкая подсветка от телевизора
-  const tvLight = new THREE.PointLight(0x60a5fa, 0.45, 3.2);
+  // Мягкая подсветка от телевизора (акцентная)
+  const tvLight = new THREE.PointLight(0x60a5fa, 0.15, 2.0);
   tvLight.position.set(0, 0.88, 0.25);
   credenzaGroup.add(tvLight);
 
@@ -954,7 +990,7 @@ function buildLivingRoom(ox) {
   const plantGroup = new THREE.Group();
   plantGroup.position.set(-1.65, 0, -1.65);
 
-  const potMat = new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.25 });
+  const potMat = new THREE.MeshStandardMaterial({ color: 0xdcd8d0, roughness: 0.85 });
   const pot = new THREE.Mesh(new THREE.CylinderGeometry(0.20, 0.15, 0.38, 24), potMat);
   pot.position.y = 0.19;
   pot.castShadow = pot.receiveShadow = true;
@@ -1030,7 +1066,7 @@ function buildLivingRoom(ox) {
   const pCanvas = document.createElement('canvas');
   pCanvas.width = 256; pCanvas.height = 192;
   const pCtx = pCanvas.getContext('2d');
-  pCtx.fillStyle = '#fff1f2'; pCtx.fillRect(0, 0, 256, 192);
+  pCtx.fillStyle = '#ded7d0'; pCtx.fillRect(0, 0, 256, 192);
   pCtx.fillStyle = '#e11d48'; pCtx.font = 'bold 24px sans-serif'; pCtx.textAlign = 'center';
   pCtx.fillText('Лёля + Любимый', 128, 70);
   pCtx.font = '38px sans-serif'; pCtx.fillText('💖', 128, 120);
@@ -1040,26 +1076,6 @@ function buildLivingRoom(ox) {
   posterGroup.add(posterMesh);
   group.add(posterGroup);
 
-  // Направленный портретный свет студии Talking Tom (1.0)
-  livingSunLight = new THREE.DirectionalLight(0xffffff, 1.0);
-  livingSunLight.position.set(ox + 1.2, 3.2, 2.4);
-  livingSunLight.target.position.set(ox, 1.0, 0);
-  livingSunLight.castShadow = true;
-  livingSunLight.shadow.mapSize.set(2048, 2048);
-  livingSunLight.shadow.bias = -0.0005;
-  livingSunLight.shadow.normalBias = 0.03; // Полностью убирает черную сетку и "грязь"
-  livingSunLight.shadow.camera.near = 0.5;
-  livingSunLight.shadow.camera.far = 10.0;
-  livingSunLight.shadow.camera.left = -2.0; livingSunLight.shadow.camera.right = 2.0;
-  livingSunLight.shadow.camera.top = 2.5;  livingSunLight.shadow.camera.bottom = -1.5;
-  scene.add(livingSunLight);
-  scene.add(livingSunLight.target);
-
-  // Контурный свет сзади (Rim Light): красивое отделение персонажа от фона
-  livingRimLight = new THREE.PointLight(0xffeedd, 0.6, 6.0);
-  livingRimLight.position.set(ox, baseY + 1.4, -1.0);
-  scene.add(livingRimLight);
-
   scene.add(group);
 }
 
@@ -1068,24 +1084,24 @@ function buildKitchenRoom(ox) {
   const group = new THREE.Group();
   group.position.x = ox;
 
-  // Пол: шахматная кухонная плитка
+  // Пол кухни (#b59d84, roughness: 0.9)
   const floorGeo = new THREE.PlaneGeometry(5.2, 4.4);
-  const floorMat = createCheckerMaterial('#dd6b4d', '#faedd9');
+  const floorMat = createCheckerMaterial('#b59d84', '#9e856e');
   const floor = new THREE.Mesh(floorGeo, floorMat);
   floor.rotation.x = -Math.PI / 2;
   floor.position.y = baseY;
   floor.receiveShadow = true;
   group.add(floor);
 
-  // Фартук кухни из белой плитки на задней стене
-  const wallMat = createTileMaterial('#ffffff', '#e2e8f0');
+  // Фартук кухни: матовая плитка (#d8d2c4, roughness: 0.9)
+  const wallMat = createTileMaterial('#d8d2c4', '#c5beae');
   const backWall = new THREE.Mesh(new THREE.PlaneGeometry(5.2, 3.6), wallMat);
   backWall.position.set(0, baseY + 1.8, -2.1);
   backWall.receiveShadow = true;
   group.add(backWall);
 
   // Навесные кухонные шкафчики с ручками
-  const cabMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.35 });
+  const cabMat = new THREE.MeshStandardMaterial({ color: 0xd8d2c4, roughness: 0.90, metalness: 0.0 });
   const handleMat = new THREE.MeshStandardMaterial({ color: 0x94a3b8, metalness: 0.8, roughness: 0.2 });
   const cabGroup = new THREE.Group();
   cabGroup.position.set(-0.8, baseY + 2.3, -1.9);
@@ -1116,7 +1132,7 @@ function buildKitchenRoom(ox) {
   chairGroup.add(chairSeat);
 
   // Мягкая подушечка на сиденье
-  const chairCushion = new THREE.Mesh(new THREE.BoxGeometry(0.50, 0.03, 0.44), new THREE.MeshStandardMaterial({ color: 0xfef3c7, roughness: 0.85 }));
+  const chairCushion = new THREE.Mesh(new THREE.BoxGeometry(0.50, 0.03, 0.44), new THREE.MeshStandardMaterial({ color: 0xd8d2c4, roughness: 0.9, metalness: 0.0 }));
   chairCushion.position.y = 0.38;
   chairCushion.castShadow = chairCushion.receiveShadow = true;
   chairGroup.add(chairCushion);
@@ -1174,15 +1190,15 @@ function buildKitchenRoom(ox) {
     tableGroup.add(leg);
   });
 
-  // Сервировочная салфетка / скатерть на столе
-  const clothMat = new THREE.MeshStandardMaterial({ color: 0xfef9c3, roughness: 0.85 });
+  // Сервировочная салфетка / скатерть на столе (матовый лен #b8a692, roughness: 0.9)
+  const clothMat = new THREE.MeshStandardMaterial({ color: 0xb8a692, roughness: 0.90, metalness: 0.0 });
   const placemat = new THREE.Mesh(new THREE.BoxGeometry(0.56, 0.010, 0.38), clothMat);
   placemat.position.set(0, 0.485, -0.04);
   placemat.receiveShadow = true;
   tableGroup.add(placemat);
 
-  // Белая сервировочная тарелка ПЕРЕД персонажем
-  const plateMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.2 });
+  // Сервировочная тарелка ПЕРЕД персонажем (матовый фарфор #d8d2c4)
+  const plateMat = new THREE.MeshStandardMaterial({ color: 0xd8d2c4, roughness: 0.90, metalness: 0.0 });
   const plate = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.15, 0.022, 24), plateMat);
   plate.position.set(0, 0.50, -0.04);
   plate.castShadow = plate.receiveShadow = true;
@@ -1194,42 +1210,17 @@ function buildKitchenRoom(ox) {
   tartBase.castShadow = true;
   tableGroup.add(tartBase);
 
-  const tartCream = new THREE.Mesh(new THREE.SphereGeometry(0.038, 12, 12), new THREE.MeshStandardMaterial({ color: 0xfff1f2, roughness: 0.3 }));
+  const tartCream = new THREE.Mesh(new THREE.SphereGeometry(0.038, 12, 12), new THREE.MeshStandardMaterial({ color: 0xd8d2c4, roughness: 0.8 }));
   tartCream.position.set(0, 0.545, -0.04);
   tartCream.castShadow = true;
   tableGroup.add(tartCream);
 
-  const tartBerry = new THREE.Mesh(new THREE.SphereGeometry(0.018, 10, 10), new THREE.MeshStandardMaterial({ color: 0xe11d48, roughness: 0.2 }));
+  const tartBerry = new THREE.Mesh(new THREE.SphereGeometry(0.018, 10, 10), new THREE.MeshStandardMaterial({ color: 0xe11d48, roughness: 0.4 }));
   tartBerry.position.set(0, 0.575, -0.04);
   tartBerry.castShadow = true;
   tableGroup.add(tartBerry);
 
   group.add(tableGroup);
-
-  // Направленный портретный свет студии Talking Tom (1.0)
-  const kitchenSunLight = new THREE.DirectionalLight(0xffffff, 1.0);
-  kitchenSunLight.position.set(ox + 1.2, 3.2, 2.4);
-  kitchenSunLight.target.position.set(ox, 1.0, 0);
-  kitchenSunLight.castShadow = true;
-  kitchenSunLight.shadow.mapSize.set(2048, 2048);
-  kitchenSunLight.shadow.bias = -0.0005;
-  kitchenSunLight.shadow.normalBias = 0.03; // Убирает shadow acne
-  kitchenSunLight.shadow.camera.near = 0.5;
-  kitchenSunLight.shadow.camera.far = 10.0;
-  kitchenSunLight.shadow.camera.left = -2.0; kitchenSunLight.shadow.camera.right = 2.0;
-  kitchenSunLight.shadow.camera.top = 2.5;  kitchenSunLight.shadow.camera.bottom = -1.5;
-  scene.add(kitchenSunLight);
-  scene.add(kitchenSunLight.target);
-
-  // Контурный свет сзади (Rim Light): мягко отделяет персонажа от фона
-  const kitchenRimLight = new THREE.PointLight(0xffeedd, 0.6, 6.0);
-  kitchenRimLight.position.set(ox, baseY + 1.4, -0.9);
-  scene.add(kitchenRimLight);
-
-  // Теплый рассеянный свет над столом
-  kitchenSconceLight = new THREE.PointLight(0xffdfba, 0.7, 5.0);
-  kitchenSconceLight.position.set(ox, baseY + 2.3, 0.8);
-  scene.add(kitchenSconceLight);
 
   scene.add(group);
 }
@@ -1239,27 +1230,27 @@ function buildBathroomRoom(ox) {
   const group = new THREE.Group();
   group.position.x = ox;
 
-  // Пол: лазурная глянцевая плитка с рельефом
+  // Пол: пастельная небесная плитка #bfdbfe (roughness: 0.9)
   const floorGeo = new THREE.PlaneGeometry(5.2, 4.4);
-  const floorMat = createTileMaterial('#e0f2fe', '#bae6fd');
+  const floorMat = createTileMaterial('#bfdbfe', '#93c5fd');
   const floor = new THREE.Mesh(floorGeo, floorMat);
   floor.rotation.x = -Math.PI / 2;
   floor.position.y = baseY;
   floor.receiveShadow = true;
   group.add(floor);
 
-  // Стены: глянцевый белый кафель
-  const wallMat = createTileMaterial('#ffffff', '#f1f5f9');
+  // Стены: мягкий матовый голубой тон (#bfdbfe)
+  const wallMat = createTileMaterial('#bfdbfe', '#93c5fd');
   const backWall = new THREE.Mesh(new THREE.PlaneGeometry(5.2, 3.6), wallMat);
   backWall.position.set(0, baseY + 1.8, -2.1);
   backWall.receiveShadow = true;
   group.add(backWall);
 
-  // Белая акриловая ванна / поддон с бортиками и сливом
+  // Ванна / поддон с бортиками и сливом (матовый акрил #93c5fd)
   const tubGroup = new THREE.Group();
   tubGroup.position.set(0, 0, 0);
 
-  const acrylicMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.1, metalness: 0.05 });
+  const acrylicMat = new THREE.MeshStandardMaterial({ color: 0x93c5fd, roughness: 0.90, metalness: 0.0 });
   // Основание поддона
   const tubBase = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.04, 1.5), acrylicMat);
   tubBase.position.y = 0.02;
@@ -1297,7 +1288,7 @@ function buildBathroomRoom(ox) {
   group.add(tubGroup);
 
   // Металлическая хромированная стойка душа
-  const chromeMat = new THREE.MeshStandardMaterial({ color: 0xf1f5f9, roughness: 0.1, metalness: 0.9 });
+  const chromeMat = new THREE.MeshStandardMaterial({ color: 0xd1d5db, roughness: 0.35, metalness: 0.8 });
   const showerPipe = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.022, 2.45), chromeMat);
   showerPipe.position.set(0.78, 1.225, -1.98);
   showerPipe.castShadow = true;
@@ -1354,35 +1345,10 @@ function buildBathroomRoom(ox) {
   group.add(showerHead);
 
   // Зеркало на стене с легким синим отражением
-  const mirror = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 1.1), new THREE.MeshStandardMaterial({ color: 0xdbeafe, roughness: 0.05, metalness: 0.9 }));
+  const mirror = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 1.1), new THREE.MeshStandardMaterial({ color: 0xc7d2fe, roughness: 0.05, metalness: 0.9 }));
   mirror.position.set(-0.85, 1.8, -2.08);
   mirror.receiveShadow = true;
   group.add(mirror);
-
-  // Направленный портретный свет студии Talking Tom (1.0)
-  const bathroomSunLight = new THREE.DirectionalLight(0xffffff, 1.0);
-  bathroomSunLight.position.set(ox + 1.2, 3.2, 2.4);
-  bathroomSunLight.target.position.set(ox, 1.0, 0);
-  bathroomSunLight.castShadow = true;
-  bathroomSunLight.shadow.mapSize.set(2048, 2048);
-  bathroomSunLight.shadow.bias = -0.0005;
-  bathroomSunLight.shadow.normalBias = 0.03;
-  bathroomSunLight.shadow.camera.near = 0.5;
-  bathroomSunLight.shadow.camera.far = 10.0;
-  bathroomSunLight.shadow.camera.left = -2.0; bathroomSunLight.shadow.camera.right = 2.0;
-  bathroomSunLight.shadow.camera.top = 2.5;  bathroomSunLight.shadow.camera.bottom = -1.5;
-  scene.add(bathroomSunLight);
-  scene.add(bathroomSunLight.target);
-
-  // Контурный свет сзади (Rim Light): красивое отделение персонажа от фона
-  const bathroomRimLight = new THREE.PointLight(0xffeedd, 0.6, 6.0);
-  bathroomRimLight.position.set(ox, baseY + 1.4, -0.9);
-  scene.add(bathroomRimLight);
-
-  // Чистый потолочный спот ванной
-  bathroomDiffusedLight = new THREE.PointLight(0xf0f8ff, 0.65, 6.0);
-  bathroomDiffusedLight.position.set(ox, 2.7, 0.2);
-  scene.add(bathroomDiffusedLight);
 
   // Сетка падающих частиц воды для душа (Three.js Points)
   initWaterDropParticles(group);
@@ -1395,96 +1361,168 @@ function buildBedroomRoom(ox) {
   const group = new THREE.Group();
   group.position.x = ox;
 
-  // Пол: ореховый паркет с рельефом
+  // 1. Пол в спальне: глубокий темный шоколадно-ореховый паркет с выраженным рельефом (#3c2214)
   const floorGeo = new THREE.PlaneGeometry(5.2, 4.4);
-  const floorMat = createWoodFloorMaterial('#78350f', '#451a03');
+  const floorMat = createWoodFloorMaterial('#3c2214', '#241208');
+  floorMat.roughness = 0.78;
   const floor = new THREE.Mesh(floorGeo, floorMat);
   floor.rotation.x = -Math.PI / 2;
   floor.position.y = baseY;
   floor.receiveShadow = true;
   group.add(floor);
 
-  // Стены: лавандовые ночные тона
-  const wallMat = createWallPaperMaterial('#faf5ff', '#f3e8ff');
+  // Стены: пастельная лаванда (#c4b5fd, roughness: 0.9)
+  const wallMat = createWallPaperMaterial('#c4b5fd', '#b29ff5');
   const backWall = new THREE.Mesh(new THREE.PlaneGeometry(5.2, 3.6), wallMat);
   backWall.position.set(0, baseY + 1.8, -2.1);
   backWall.receiveShadow = true;
   group.add(backWall);
 
-  // Плинтус
-  const bb = new THREE.Mesh(new THREE.BoxGeometry(5.2, 0.12, 0.05), new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.35 }));
+  // Плинтус из темного эспрессо-дерева (#241208)
+  const bb = new THREE.Mesh(new THREE.BoxGeometry(5.2, 0.12, 0.05), new THREE.MeshStandardMaterial({ color: 0x241208, roughness: 0.85, metalness: 0.0 }));
   bb.position.set(0, baseY + 0.06, -2.08);
   bb.receiveShadow = true;
   group.add(bb);
 
-  // Уютный прикроватный коврик на полу
-  const bedRug = new THREE.Mesh(
-    new THREE.PlaneGeometry(1.8, 1.2),
-    new THREE.MeshStandardMaterial({ color: 0xfdf2f8, roughness: 0.9 })
+  // 2. Глубокая контактная тень на полу строго под каркасом кровати (ambient occlusion)
+  const shadowCanvas = document.createElement('canvas');
+  shadowCanvas.width = shadowCanvas.height = 256;
+  const sCtx = shadowCanvas.getContext('2d');
+  const sGrad = sCtx.createRadialGradient(128, 128, 30, 128, 128, 124);
+  sGrad.addColorStop(0, 'rgba(10, 5, 2, 0.96)');
+  sGrad.addColorStop(0.55, 'rgba(10, 5, 2, 0.70)');
+  sGrad.addColorStop(0.85, 'rgba(10, 5, 2, 0.25)');
+  sGrad.addColorStop(1, 'rgba(10, 5, 2, 0.0)');
+  sCtx.fillStyle = sGrad;
+  sCtx.fillRect(0, 0, 256, 256);
+  const shadowTex = new THREE.CanvasTexture(shadowCanvas);
+  const bedShadow = new THREE.Mesh(
+    new THREE.PlaneGeometry(1.80, 2.10),
+    new THREE.MeshBasicMaterial({
+      map: shadowTex,
+      transparent: true,
+      opacity: 0.95,
+      depthWrite: false
+    })
   );
-  bedRug.rotation.x = -Math.PI / 2;
-  bedRug.position.set(0, 0.005, 0.85);
-  bedRug.receiveShadow = true;
-  group.add(bedRug);
+  bedShadow.rotation.x = -Math.PI / 2;
+  bedShadow.position.set(0, baseY + 0.002, -0.65);
+  group.add(bedShadow);
 
-  // ── ПРОРАБОТАННАЯ КРОВАТЬ С МАТРАСОМ (y = 0.55) И ПОДУШКАМИ ──
+  // 3. ДИЗАЙНЕРСКАЯ КРОВАТЬ НА НОЖКАХ С ВОЗДУШНЫМ ЗАЗОРОМ (y=0..0.15) И ВЫСОКИМ КОНТРАСТОМ
   const bedGroup = new THREE.Group();
   bedGroup.position.set(0, 0, 0);
 
-  // Каркас из темного дерева (BoxGeometry, rough=0.6)
-  const woodFrameMat = new THREE.MeshStandardMaterial({ color: 0x271c19, roughness: 0.6 });
-  const bedBase = new THREE.Mesh(new THREE.BoxGeometry(1.65, 0.32, 2.15), woodFrameMat);
-  bedBase.position.set(0, 0.16, -0.55);
+  // Материалы:
+  // Каркас: теплый медовый дуб (#c28542)
+  const bedOakMat = new THREE.MeshStandardMaterial({ color: 0xc28542, roughness: 0.65, metalness: 0.0 });
+  // Контрастный темный эспрессо-кант и ножки (#241208)
+  const bedDarkMat = new THREE.MeshStandardMaterial({ color: 0x241208, roughness: 0.75, metalness: 0.0 });
+  // Золотые латунные наконечники ножек
+  const brassCapMat = new THREE.MeshStandardMaterial({ color: 0xd4af37, roughness: 0.25, metalness: 0.85 });
+
+  // 4 изящные ножки с латунными наконечниками (высота 0.15м - между полом и каркасом чистый просвет!)
+  const legGeo = new THREE.CylinderGeometry(0.038, 0.028, 0.15, 16);
+  const brassGeo = new THREE.CylinderGeometry(0.030, 0.028, 0.035, 16);
+  [[-0.74, -1.50], [0.74, -1.50], [-0.74, 0.22], [0.74, 0.22]].forEach(([lx, lz]) => {
+    const legMesh = new THREE.Mesh(legGeo, bedDarkMat);
+    legMesh.position.set(lx, 0.075, lz);
+    legMesh.castShadow = legMesh.receiveShadow = true;
+    bedGroup.add(legMesh);
+
+    const brassMesh = new THREE.Mesh(brassGeo, brassCapMat);
+    brassMesh.position.set(lx, 0.0175, lz);
+    brassMesh.castShadow = true;
+    bedGroup.add(brassMesh);
+  });
+
+  // Нижняя темная окантовка каркаса (y = 0.15..0.17) - четкая граница с тенью
+  const baseRail = new THREE.Mesh(new THREE.BoxGeometry(1.64, 0.025, 1.86), bedDarkMat);
+  baseRail.position.set(0, 0.1625, -0.64);
+  baseRail.castShadow = baseRail.receiveShadow = true;
+  bedGroup.add(baseRail);
+
+  // Основной деревянный каркас кровати теплого дуба (y = 0.175..0.33)
+  const bedBase = new THREE.Mesh(new THREE.BoxGeometry(1.62, 0.16, 1.84), bedOakMat);
+  bedBase.position.set(0, 0.255, -0.64);
   bedBase.castShadow = bedBase.receiveShadow = true;
   bedGroup.add(bedBase);
 
-  // Высокое деревянное изголовье кровати у стены (z = -1.62)
-  const headboard = new THREE.Mesh(new THREE.BoxGeometry(1.68, 1.15, 0.12), woodFrameMat);
-  headboard.position.set(0, 0.70, -1.62);
-  headboard.castShadow = headboard.receiveShadow = true;
-  bedGroup.add(headboard);
+  // Высокое деревянное изголовье у стены (z = -1.58, высота 1.20м)
+  const headboardFrame = new THREE.Mesh(new THREE.BoxGeometry(1.66, 1.20, 0.10), bedDarkMat);
+  headboardFrame.position.set(0, 0.75, -1.58);
+  headboardFrame.castShadow = headboardFrame.receiveShadow = true;
+  bedGroup.add(headboardFrame);
 
-  // Белый ортопедический матрас (верх матраса на y = 0.55)
-  const mattressMat = new THREE.MeshStandardMaterial({ color: 0xfafaf9, roughness: 0.9 });
-  const mattress = new THREE.Mesh(new THREE.BoxGeometry(1.52, 0.23, 2.05), mattressMat);
-  mattress.position.set(0, 0.435, -0.55); // y от 0.32 до 0.55
+  // Внутренняя панель изголовья теплого дуба
+  const headboardPanel = new THREE.Mesh(new THREE.BoxGeometry(1.52, 0.96, 0.04), bedOakMat);
+  headboardPanel.position.set(0, 0.78, -1.52);
+  headboardPanel.castShadow = headboardPanel.receiveShadow = true;
+  bedGroup.add(headboardPanel);
+
+  // 4. МАТРАС (y = 0.33..0.50): белоснежная простыня (#ffffff)
+  const mattressMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.85, metalness: 0.0 });
+  const mattress = new THREE.Mesh(new THREE.BoxGeometry(1.52, 0.17, 1.78), mattressMat);
+  mattress.position.set(0, 0.415, -0.64);
   mattress.castShadow = mattress.receiveShadow = true;
   bedGroup.add(mattress);
 
-  // Мягкая подушка у изголовья (z = -1.15)
-  const pillowMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.95 });
-  const pillow1 = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.12, 0.38), pillowMat);
-  pillow1.position.set(-0.36, 0.60, -1.15);
-  pillow1.castShadow = pillow1.receiveShadow = true;
-  bedGroup.add(pillow1);
-
-  const pillow2 = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.12, 0.38), pillowMat);
-  pillow2.position.set(0.36, 0.60, -1.15);
-  pillow2.castShadow = pillow2.receiveShadow = true;
-  bedGroup.add(pillow2);
-
-  // Объемное одеяло поверх матраса (мягкий пастельно-розовый цвет)
-  const blanketMat = new THREE.MeshStandardMaterial({ color: 0xfbcfe8, roughness: 0.85 });
-  const blanket = new THREE.Mesh(new THREE.BoxGeometry(1.54, 0.08, 1.25), blanketMat);
-  blanket.position.set(0, 0.62, -0.10);
-  blanket.rotation.x = 0.04; // легкий анатомический наклон
+  // 5. ТЕКСТИЛЬ И ПОКРЫВАЛО: контрастный уютный насыщенный ягодно-розовый (#d43f68)
+  const blanketMat = new THREE.MeshStandardMaterial({ color: 0xd43f68, roughness: 0.85, metalness: 0.0 });
+  const blanket = new THREE.Mesh(new THREE.BoxGeometry(1.56, 0.09, 1.20), blanketMat);
+  blanket.position.set(0, 0.525, -0.36);
   blanket.castShadow = blanket.receiveShadow = true;
   bedGroup.add(blanket);
 
-  const blanketFlap = new THREE.Mesh(new THREE.BoxGeometry(1.54, 0.06, 0.18), new THREE.MeshStandardMaterial({ color: 0xf472b6, roughness: 0.8 }));
-  blanketFlap.position.set(0, 0.65, -0.68);
+  // Мягкий подворот одеяла у изголовья (нежный зефирно-розовый #fed7e2)
+  const blanketFlapMat = new THREE.MeshStandardMaterial({ color: 0xfed7e2, roughness: 0.88, metalness: 0.0 });
+  const blanketFlap = new THREE.Mesh(new THREE.BoxGeometry(1.56, 0.07, 0.18), blanketFlapMat);
+  blanketFlap.position.set(0, 0.54, -0.95);
   blanketFlap.castShadow = blanketFlap.receiveShadow = true;
   bedGroup.add(blanketFlap);
 
+  // Роскошный прикроватный плед-дорожка в изножье (глубокий сливовый сатин #6b2148)
+  const runnerMat = new THREE.MeshStandardMaterial({ color: 0x6b2148, roughness: 0.80, metalness: 0.0 });
+  const bedRunner = new THREE.Mesh(new THREE.BoxGeometry(1.58, 0.04, 0.28), runnerMat);
+  bedRunner.position.set(0, 0.56, 0.12);
+  bedRunner.castShadow = bedRunner.receiveShadow = true;
+  bedGroup.add(bedRunner);
+
+  // Две белоснежные подушки
+  const pillowMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.95, metalness: 0.0 });
+  const pillow1 = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.13, 0.36), pillowMat);
+  pillow1.position.set(-0.36, 0.57, -1.25);
+  pillow1.rotation.x = 0.10;
+  pillow1.castShadow = pillow1.receiveShadow = true;
+  bedGroup.add(pillow1);
+
+  const pillow2 = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.13, 0.36), pillowMat);
+  pillow2.position.set(0.36, 0.57, -1.25);
+  pillow2.rotation.x = 0.10;
+  pillow2.castShadow = pillow2.receiveShadow = true;
+  bedGroup.add(pillow2);
+
+  // Декоративная мини-подушечка по центру
+  const accentPillow = new THREE.Mesh(new THREE.BoxGeometry(0.38, 0.12, 0.24), blanketMat);
+  accentPillow.position.set(0, 0.58, -1.05);
+  accentPillow.rotation.x = 0.18;
+  accentPillow.castShadow = accentPillow.receiveShadow = true;
+  bedGroup.add(accentPillow);
+
   group.add(bedGroup);
 
-  // ── ТУМБОЧКА И НАСТОЛЬНЫЙ СВЕТИЛЬНИК С АБАЖУРОМ ──
-  const standMat = new THREE.MeshStandardMaterial({ color: 0x3b2416, roughness: 0.55 });
-  const stand = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.50, 0.50), standMat);
-  stand.position.set(-1.20, 0.25, -1.10);
+  // 6. ТУМБОЧКА И НАСТОЛЬНЫЙ СВЕТИЛЬНИК С АБАЖУРОМ
+  const standMat = new THREE.MeshStandardMaterial({ color: 0x241208, roughness: 0.75 });
+  const stand = new THREE.Mesh(new THREE.BoxGeometry(0.50, 0.46, 0.46), standMat);
+  stand.position.set(-1.18, 0.23, -1.15);
   stand.castShadow = stand.receiveShadow = true;
   stand.userData = { isLamp: true };
   group.add(stand);
+
+  // Выдвижной ящичек теплого дуба
+  const drawerFront = new THREE.Mesh(new THREE.BoxGeometry(0.44, 0.16, 0.02), bedOakMat);
+  drawerFront.position.set(-1.18, 0.32, -0.91);
+  group.add(drawerFront);
 
   // Светильник на тумбочке
   const lampGroup = new THREE.Group();
@@ -1498,9 +1536,9 @@ function buildBedroomRoom(ox) {
 
   // Полупрозрачный абажур (CylinderGeometry)
   const shadeMat = new THREE.MeshStandardMaterial({
-    color: 0xfef08a, roughness: 0.4,
-    emissive: new THREE.Color(0xffa34d),
-    emissiveIntensity: 0.6
+    color: 0xded08a, roughness: 0.6,
+    emissive: new THREE.Color(0xd97706),
+    emissiveIntensity: 0.5
   });
   bedroomShadeMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.24, 0.28, 24, 1, true), shadeMat);
   bedroomShadeMesh.position.y = 0.38;
@@ -1529,36 +1567,11 @@ function buildBedroomRoom(ox) {
   bedroomWindowSkyMesh.position.z = -0.02;
   winGroup.add(bedroomWindowSkyMesh);
 
-  const frameMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.3 });
+  const frameMat = new THREE.MeshStandardMaterial({ color: 0xdcd8d0, roughness: 0.8 });
   const winFrame = new THREE.Mesh(new THREE.BoxGeometry(1.6, 1.8, 0.05), frameMat);
   winFrame.castShadow = true;
   winGroup.add(winFrame);
   group.add(winGroup);
-
-  // Направленный портретный свет студии Talking Tom (1.0)
-  bedroomSunLight = new THREE.DirectionalLight(0xffffff, 1.0);
-  bedroomSunLight.position.set(ox + 1.2, 3.2, 2.4);
-  bedroomSunLight.target.position.set(ox, 1.0, 0.4);
-  bedroomSunLight.castShadow = true;
-  bedroomSunLight.shadow.mapSize.set(2048, 2048);
-  bedroomSunLight.shadow.bias = -0.0005;
-  bedroomSunLight.shadow.normalBias = 0.03;
-  bedroomSunLight.shadow.camera.near = 0.5;
-  bedroomSunLight.shadow.camera.far = 10.0;
-  bedroomSunLight.shadow.camera.left = -2.0; bedroomSunLight.shadow.camera.right = 2.0;
-  bedroomSunLight.shadow.camera.top = 2.5;  bedroomSunLight.shadow.camera.bottom = -1.5;
-  scene.add(bedroomSunLight);
-  scene.add(bedroomSunLight.target);
-
-  // Контурный свет сзади (Rim Light): красивое отделение персонажа от фона
-  bedroomRimLight = new THREE.PointLight(0xffeedd, 0.6, 6.0);
-  bedroomRimLight.position.set(ox, baseY + 1.4, -0.6);
-  scene.add(bedroomRimLight);
-
-  // Слабый синий свет из окна (лунный свет)
-  bedroomMoonLight = new THREE.PointLight(0x1e3a8a, 0.25, 6.0);
-  bedroomMoonLight.position.set(ox + 1.0, 1.9, -1.0);
-  scene.add(bedroomMoonLight);
 
   scene.add(group);
 }
@@ -1601,7 +1614,7 @@ function createWoodFloorMaterial(c1, c2) {
   bumpTex.repeat.set(3, 3);
 
   return new THREE.MeshStandardMaterial({
-    map: tex, bumpMap: bumpTex, bumpScale: 0.02, roughness: 0.45, metalness: 0.05
+    map: tex, bumpMap: bumpTex, bumpScale: 0.02, roughness: 0.90, metalness: 0.0
   });
 }
 
@@ -1633,7 +1646,7 @@ function createTileMaterial(c1, c2) {
   bumpTex.repeat.set(4, 4);
 
   return new THREE.MeshStandardMaterial({
-    map: tex, bumpMap: bumpTex, bumpScale: 0.015, roughness: 0.18, metalness: 0.05
+    map: tex, bumpMap: bumpTex, bumpScale: 0.015, roughness: 0.85, metalness: 0.0
   });
 }
 
@@ -1652,7 +1665,7 @@ function createCheckerMaterial(c1, c2) {
   const tex = new THREE.CanvasTexture(canvas);
   tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
   tex.repeat.set(4, 4);
-  return new THREE.MeshStandardMaterial({ map: tex, roughness: 0.25, metalness: 0.05 });
+  return new THREE.MeshStandardMaterial({ map: tex, roughness: 0.90, metalness: 0.0 });
 }
 
 function createWallPaperMaterial(c1, c2) {
@@ -1665,7 +1678,7 @@ function createWallPaperMaterial(c1, c2) {
   const tex = new THREE.CanvasTexture(canvas);
   tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
   tex.repeat.set(4, 3);
-  return new THREE.MeshStandardMaterial({ map: tex, roughness: 0.7 });
+  return new THREE.MeshStandardMaterial({ map: tex, roughness: 0.90, metalness: 0.0 });
 }
 
 function drawNightSky(canvas) {
@@ -1687,63 +1700,316 @@ function drawNightSky(canvas) {
   });
 }
 
-// ─── ФУНКЦИЯ ПРИНУДИТЕЛЬНОГО РАССЛАБЛЕНИЯ РУК (УБИРАЕМ T-ПОЗУ НАВСЕГДА) ────────
-function setNaturalPose(model) {
-  if (!model) return;
-  model.traverse((node) => {
-    if (node.isBone) {
-      const name = node.name.toLowerCase();
-      // Опускаем руки вдоль туловища
-      if (name.includes('arm') && !name.includes('forearm')) {
-        if (name.includes('l') || name.includes('left')) {
-          node.rotation.z = -1.15;
-          node.rotation.x = 0.2;
-          node.rotation.y = 0;
-        }
-        if (name.includes('r') || name.includes('right')) {
-          node.rotation.z = 1.15;
-          node.rotation.x = 0.2;
-          node.rotation.y = 0;
-        }
-      }
-      // Слегка сгибаем локти вперед
-      if (name.includes('forearm')) {
-        node.rotation.x = 0.35;
-        node.rotation.y = 0;
-        node.rotation.z = 0;
-      }
-    }
+// ─── ПРОЦЕДУРНЫЕ НОЖКИ, МИНИ-ЮБКА И СТИЛЬНЫЕ КРОССОВКИ (TALKING TOM STYLE) ───
+function createPleatedSkirtMaterial() {
+  const canvas = document.createElement('canvas');
+  canvas.width = 512;
+  canvas.height = 256;
+  const ctx = canvas.getContext('2d');
+
+  const bumpCanvas = document.createElement('canvas');
+  bumpCanvas.width = 512;
+  bumpCanvas.height = 256;
+  const bCtx = bumpCanvas.getContext('2d');
+
+  // Основной глубокий графитовый цвет ткани (#374151)
+  ctx.fillStyle = '#374151';
+  ctx.fillRect(0, 0, 512, 256);
+
+  bCtx.fillStyle = '#808080';
+  bCtx.fillRect(0, 0, 512, 256);
+
+  // 24 четкие вертикальные складки плиссировки (по числу 24 граней цилиндра)
+  const numPleats = 24;
+  const pleatWidth = 512 / numPleats;
+
+  for (let i = 0; i < numPleats; i++) {
+    const x = i * pleatWidth;
+
+    // Внутренняя тень в глубине складки (процедурные темные полоски)
+    ctx.fillStyle = '#1e242d';
+    ctx.fillRect(x, 0, pleatWidth * 0.44, 256);
+
+    // Основная освещенная грань складки
+    ctx.fillStyle = '#3f4b5d';
+    ctx.fillRect(x + pleatWidth * 0.44, 0, pleatWidth * 0.56, 256);
+
+    // Тонкий светлый блик на ребре складки
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
+    ctx.fillRect(x + pleatWidth * 0.44, 0, 1.5, 256);
+
+    // BumpMap: рельеф складок (впадина темная, гребень светлый)
+    bCtx.fillStyle = '#2d2d2d';
+    bCtx.fillRect(x, 0, pleatWidth * 0.44, 256);
+    bCtx.fillStyle = '#d0d0d0';
+    bCtx.fillRect(x + pleatWidth * 0.44, 0, pleatWidth * 0.56, 256);
+  }
+
+  // Контрастный аккуратный кант по нижнему краю юбки
+  ctx.fillStyle = '#f8fafc';
+  ctx.fillRect(0, 256 - 16, 512, 10);
+  ctx.fillStyle = '#94a3b8';
+  ctx.fillRect(0, 256 - 6, 512, 2);
+
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.wrapS = THREE.RepeatWrapping;
+  tex.wrapT = THREE.ClampToEdgeWrapping;
+
+  const bumpTex = new THREE.CanvasTexture(bumpCanvas);
+  bumpTex.wrapS = THREE.RepeatWrapping;
+  bumpTex.wrapT = THREE.ClampToEdgeWrapping;
+
+  return new THREE.MeshStandardMaterial({
+    map: tex,
+    bumpMap: bumpTex,
+    bumpScale: 0.035,
+    roughness: 0.85,
+    metalness: 0.02
   });
 }
 
-// ─── ЗАГРУЗКА GIRL.GLB + ЖЕСТКИЙ СБРОС EMISSIVE И УСТАНОВКА ЕСТЕСТВЕННОЙ ПОЗЫ ─
+function buildCharacterLegs() {
+  const legsGroup = new THREE.Group();
+  legsGroup.name = 'characterLegs';
+
+  // Аккуратная плиссированная юбка (верх 0.106, низ 0.145, высота 0.13, 24 сегмента)
+  const skirtMat = createPleatedSkirtMaterial();
+  const skirtGeo = new THREE.CylinderGeometry(0.106, 0.145, 0.13, 24, 1, false);
+  const skirt = new THREE.Mesh(skirtGeo, skirtMat);
+  skirt.position.set(0, 0.43, 0);
+  skirt.rotation.set(0, 0, 0); // Строго горизонтально и симметрично относительно ног
+  skirt.castShadow = true;
+  legsGroup.add(skirt);
+
+  // Контрастный аккуратный кант по нижнему краю
+  const hemGeo = new THREE.CylinderGeometry(0.1455, 0.1465, 0.008, 24, 1, true);
+  const hemMat = new THREE.MeshStandardMaterial({
+    color: 0xf8fafc,
+    roughness: 0.70,
+    metalness: 0.05
+  });
+  const hemTrim = new THREE.Mesh(hemGeo, hemMat);
+  hemTrim.position.set(0, 0.43 - 0.065, 0);
+  hemTrim.rotation.set(0, 0, 0);
+  legsGroup.add(hemTrim);
+
+  // Ножки в стильных черных колготках / легинсах
+  const legMat = new THREE.MeshStandardMaterial({
+    color: 0x18181b,
+    roughness: 0.85,
+    metalness: 0.0
+  });
+
+  const sneakerWhiteMat = new THREE.MeshStandardMaterial({ color: 0xe2e2e2, roughness: 0.85 });
+  const sneakerPinkMat = new THREE.MeshStandardMaterial({ color: 0xf472b6, roughness: 0.70 });
+  const sneakerSoleMat = new THREE.MeshStandardMaterial({ color: 0xe5e5e5, roughness: 0.90 });
+
+  [-0.055, 0.055].forEach(lx => {
+    const legSub = new THREE.Group();
+    legSub.position.x = lx;
+
+    // Бедро
+    const thigh = new THREE.Mesh(new THREE.CylinderGeometry(0.042, 0.034, 0.18, 16), legMat);
+    thigh.position.y = 0.30;
+    thigh.castShadow = true;
+    legSub.add(thigh);
+
+    // Голень
+    const calf = new THREE.Mesh(new THREE.CylinderGeometry(0.034, 0.026, 0.18, 16), legMat);
+    calf.position.y = 0.15;
+    calf.castShadow = true;
+    legSub.add(calf);
+
+    // Розовый манжет кроссовок / носочек
+    const cuff = new THREE.Mesh(new THREE.CylinderGeometry(0.033, 0.031, 0.04, 16), sneakerPinkMat);
+    cuff.position.y = 0.065;
+    cuff.castShadow = true;
+    legSub.add(cuff);
+
+    // Белый корпус кроссовка
+    const shoe = new THREE.Mesh(new THREE.BoxGeometry(0.065, 0.05, 0.14), sneakerWhiteMat);
+    shoe.position.set(0, 0.035, 0.025);
+    shoe.castShadow = true;
+    legSub.add(shoe);
+
+    // Розовый мысок
+    const toe = new THREE.Mesh(new THREE.CylinderGeometry(0.032, 0.032, 0.05, 16, 1, false, 0, Math.PI), sneakerPinkMat);
+    toe.rotation.z = Math.PI / 2;
+    toe.rotation.x = Math.PI / 2;
+    toe.position.set(0, 0.035, 0.085);
+    toe.castShadow = true;
+    legSub.add(toe);
+
+    // Подошва платформы
+    const sole = new THREE.Mesh(new THREE.BoxGeometry(0.072, 0.022, 0.155), sneakerSoleMat);
+    sole.position.set(0, 0.011, 0.025);
+    sole.castShadow = true;
+    legSub.add(sole);
+
+    legsGroup.add(legSub);
+  });
+
+  return legsGroup;
+}
+
+// ─── СТАБИЛЬНОЕ ПРОЦЕДУРНОЕ ПОЗИЦИОНИРОВАНИЕ РУК ДЛЯ ВСЕХ КОМНАТ (~25°) ────────
+function applyProceduralArmPose(mesh, liftRight = 0) {
+  if (!mesh || !mesh.geometry?.userData?.armIndices || !mesh.geometry?.userData?.origPos) return;
+  const pos = mesh.geometry.attributes.position;
+  const orig = mesh.geometry.userData.origPos;
+  const armIndices = mesh.geometry.userData.armIndices;
+
+  // Стабильный анатомический угол опускания рук (~15°, 0.26 rad) для всех комнат без врезания в куртку
+  const angle = 0.26;
+
+  for (let k = 0; k < armIndices.length; k++) {
+    const i = armIndices[k];
+    const ox = orig[i * 3];
+    const oy = orig[i * 3 + 1];
+    const oz = orig[i * 3 + 2];
+
+    if (ox > 0.12) {
+      // Левая рука: плавно опущена вдоль туловища под углом ~25°
+      const dx = ox - 0.14;
+      const dy = oy - 0.68;
+      const dist = Math.hypot(dx, dy);
+      const w = Math.min(1.0, Math.max(0.0, (dist - 0.02) / 0.08));
+
+      const rx = dx * Math.cos(-angle * w) - dy * Math.sin(-angle * w);
+      const ry = dx * Math.sin(-angle * w) + dy * Math.cos(-angle * w);
+      pos.array[i * 3]     = 0.14 + rx;
+      pos.array[i * 3 + 1] = 0.68 + ry;
+      pos.array[i * 3 + 2] = oz + (dist > 0.15 ? 0.015 : 0.0);
+    } else if (ox < -0.12) {
+      // Правая рука
+      const dx = ox - (-0.14);
+      const dy = oy - 0.68;
+      const dist = Math.hypot(dx, dy);
+      const w = Math.min(1.0, Math.max(0.0, (dist - 0.02) / 0.08));
+
+      if (liftRight > 0.01) {
+        // Подъем предплечья при кормлении
+        const liftW = Math.min(1.0, Math.max(0.0, (dist - 0.04) / 0.14)) * liftRight;
+        pos.array[i * 3]     = THREE.MathUtils.lerp(ox, -0.06, liftW * 0.75);
+        pos.array[i * 3 + 1] = THREE.MathUtils.lerp(oy, 0.74, liftW * 0.85);
+        pos.array[i * 3 + 2] = THREE.MathUtils.lerp(oz, 0.16, liftW * 0.90);
+      } else {
+        const rx = dx * Math.cos(angle * w) - dy * Math.sin(angle * w);
+        const ry = dx * Math.sin(angle * w) + dy * Math.cos(angle * w);
+        pos.array[i * 3]     = -0.14 + rx;
+        pos.array[i * 3 + 1] = 0.68 + ry;
+        pos.array[i * 3 + 2] = oz + (dist > 0.15 ? 0.015 : 0.0);
+      }
+    }
+  }
+
+  pos.needsUpdate = true;
+}
+
+// ─── ЗАГРУЗКА GIRL.GLB + СОХРАНЕНИЕ ОРИГИНАЛЬНЫХ МАТЕРИАЛОВ И АНИМАЦИИ ───────
 function loadCharacterModel() {
   const loader = new THREE.GLTFLoader();
   const bar = $('load-bar');
   const txt = $('load-text');
 
   loader.load(
-    '/static/models/girl.glb',
+    '/static/models/girl.glb?v=' + Date.now(),
     (gltf) => {
       charGroup = new THREE.Group();
       const model = gltf.scene;
 
-      // ОБХОД МЕШЕЙ: НАСТРОЙКА ДЛЯ ЧИСТОГО МУЛЬТЯШНОГО ЦВЕТА И УСТРАНЕНИЯ ТЕНЕВЫХ ПЯТЕН
+      // Если в файле есть анимации покоя (Idle/Breathing) - подключаем THREE.AnimationMixer
+      if (gltf.animations && gltf.animations.length > 0) {
+        mixer = new THREE.AnimationMixer(model);
+        const action = mixer.clipAction(gltf.animations[0]);
+        action.play();
+      }
+
+      // ОБХОД МЕШЕЙ: ИСПОЛЬЗУЕМ ОРИГИНАЛЬНЫЕ МАТЕРИАЛЫ ИЗ GLB, ЛИШЬ ВЫКЛЮЧАЕМ FLATSHADING
       model.traverse((child) => {
         if (child.isMesh) {
-          child.castShadow = true;
-          child.receiveShadow = false; // КРИТИЧНО: отключаем самозатенение тела, чтобы убрать темные пятна на лице!
-          if (child.material) {
-            child.material.emissive = new THREE.Color(0x000000);
-            child.material.emissiveIntensity = 0;
-            child.material.roughness = Math.max(child.material.roughness || 0.4, 0.4);
-            child.material.metalness = 0.0;
-            if (child.isSkinnedMesh) child.material.skinning = true;
-            child.material.needsUpdate = true;
+          characterMesh = child;
+          if (child.isSkinnedMesh) {
+            console.log('✅ Успешно загружен SkinnedMesh:', child.name, '| Костей в скелете:', child.skeleton?.bones?.length);
           }
-          if (child.geometry) {
-            // Устранение полос полигонов и сглаживание нормалей
-            child.geometry.computeVertexNormals();
+          child.castShadow = true;
+          child.receiveShadow = false;
+
+          if (child.isMesh && child.material) {
+            const mats = Array.isArray(child.material) ? child.material : [child.material];
+            mats.forEach((mat) => {
+              if (mat) {
+                mat.roughness = 0.6;
+                mat.metalness = 0.0;
+                mat.flatShading = false;
+                if (mat.map) mat.map.colorSpace = THREE.SRGBColorSpace;
+                mat.needsUpdate = true;
+              }
+            });
+          }
+
+          // Поиск морфов рта
+          if (child.morphTargetDictionary) {
+            const dict = child.morphTargetDictionary;
+            const mouthKeys = ['mouthOpen', 'jawOpen', 'viseme_aa', 'mouth_open', 'v_aa', 'openMouth', 'mouth'];
+            for (const k of mouthKeys) {
+              if (dict[k] !== undefined) { morphMouthIndex = dict[k]; break; }
+            }
+          }
+
+          // Процедурный морф моргания верхних век и процедурный морф открытия рта
+          if (child.isSkinnedMesh) {
+            window.characterMesh = child;
+            const pos = child.geometry.attributes.position;
+            const deltaEye = new Float32Array(pos.count * 3);
+            const deltaMouth = new Float32Array(pos.count * 3);
+
+            for (let i = 0; i < pos.count; i++) {
+              const ox = pos.array[i * 3];
+              const oy = pos.array[i * 3 + 1];
+              const oz = pos.array[i * 3 + 2];
+              const absX = Math.abs(ox);
+
+              // 1. Моргание век
+              if (oy >= 0.840 && oy <= 0.875 && absX >= 0.025 && absX <= 0.075 && oz > 0.082) {
+                const weight = Math.sin(((oy - 0.840) / 0.035) * Math.PI);
+                deltaEye[i * 3 + 1] = -0.016 * Math.max(0.2, weight);
+              }
+
+              // 2. Открытие рта / челюсти
+              if (absX <= 0.045 && oz >= 0.072) {
+                if (oy >= 0.745 && oy <= 0.785) {
+                  const weight = Math.cos((absX / 0.045) * (Math.PI / 2)) * Math.sin(((oy - 0.745) / 0.040) * Math.PI);
+                  deltaMouth[i * 3 + 1] = -0.024 * Math.max(0.1, weight); // опускание нижней губы/подбородка
+                  deltaMouth[i * 3 + 2] = -0.006 * Math.max(0.1, weight);
+                } else if (oy > 0.785 && oy <= 0.805) {
+                  const weight = Math.cos((absX / 0.045) * (Math.PI / 2)) * Math.sin(((oy - 0.785) / 0.020) * Math.PI);
+                  deltaMouth[i * 3 + 1] = 0.008 * Math.max(0.1, weight);  // подъем верхней губы
+                }
+              }
+            }
+
+            child.geometry.morphAttributes = child.geometry.morphAttributes || {};
+            child.geometry.morphAttributes.position = [
+              new THREE.BufferAttribute(deltaEye, 3),
+              new THREE.BufferAttribute(deltaMouth, 3)
+            ];
+            child.morphTargetInfluences = [0.0, 0.0];
+            child.updateMorphTargets();
+            morphEyeBlinkIndex = 0;
+            morphMouthIndex = 1;
+
+            // Сохранение оригинальных координат вершин рук
+            child.geometry.userData.origPos = Float32Array.from(pos.array);
+            const armIndices = [];
+            for (let i = 0; i < pos.count; i++) {
+              const ox = pos.array[i * 3];
+              const oy = pos.array[i * 3 + 1];
+              if (oy < 0.72 && oy > 0.30 && Math.abs(ox) > 0.12) {
+                armIndices.push(i);
+              }
+            }
+            child.geometry.userData.armIndices = new Int32Array(armIndices);
           }
         }
         if (child.isBone) {
@@ -1754,6 +2020,8 @@ function loadCharacterModel() {
           else if (name.includes('rightforearm') || name === 'mixamorig:rightforearm') bones.rightForeArm = child;
           else if (name.includes('leftshoulder') || name === 'mixamorig:leftshoulder') bones.leftShoulder = child;
           else if (name.includes('rightshoulder') || name === 'mixamorig:rightshoulder') bones.rightShoulder = child;
+          else if (name.includes('lefthand') && !name.includes('thumb') && !name.includes('index') && !name.includes('middle') && !name.includes('ring') && !name.includes('pinky')) bones.leftHand = child;
+          else if (name.includes('righthand') && !name.includes('thumb') && !name.includes('index') && !name.includes('middle') && !name.includes('ring') && !name.includes('pinky')) bones.rightHand = child;
           else if (name.includes('head') && !name.includes('top')) bones.head = child;
           else if (name.includes('neck')) bones.neck = child;
           else if (name.includes('spine')) bones.spine = child;
@@ -1766,8 +2034,16 @@ function loadCharacterModel() {
         }
       });
 
-      // Принудительно расслабляем руки и убираем T-позу сразу после загрузки
-      setNaturalPose(model);
+      // Алиасы для прямого доступа к костям Mixamo
+      bones.mixamorigLeftArm = bones.leftArm;
+      bones.mixamorigRightArm = bones.rightArm;
+      bones.mixamorigLeftForeArm = bones.leftForeArm;
+      bones.mixamorigRightForeArm = bones.rightForeArm;
+      window.bones = bones;
+
+      for (let k in bones) {
+        if (bones[k]) initialBoneRots[k] = bones[k].rotation.clone();
+      }
 
       // Центрирование модели
       const box = new THREE.Box3().setFromObject(model);
@@ -1776,12 +2052,18 @@ function loadCharacterModel() {
       const scaleFactor = 1.0 / Math.max(size.y, 0.001);
 
       model.scale.setScalar(scaleFactor);
-      model.position.set(-center.x * scaleFactor, -box.min.y * scaleFactor, -center.z * scaleFactor);
+      model.position.set(-center.x * scaleFactor, 0.44, -center.z * scaleFactor);
+
+      // Добавляем стильные ножки, мини-юбку и кроссовки
+      characterLegs = buildCharacterLegs();
+      charGroup.add(characterLegs);
+      window.characterLegs = characterLegs;
 
       charGroup.add(model);
       charGroup.scale.setScalar(baseScale);
-      charGroup.position.set(0, baseY, 0);
+      charGroup.position.set(0, 0.04, 0);
       scene.add(charGroup);
+      window.charGroup = charGroup;
 
       // Применяем начальную естественную позу для гостиной
       applyRoomPose('living');
@@ -1809,47 +2091,42 @@ function loadCharacterModel() {
   );
 }
 
-// ─── 3. АНАТОМИЯ И ПОЗЫ МОДЕЛИ ПО КОМНАТАМ ──────────────────────────────────
+// ─── 3. АНАТОМИЯ И ПОЗЫ МОДЕЛИ ПО КОМНАТАМ (ПЛАВНАЯ ИНТЕРПОЛЯЦИЯ GSAP 0.7s) ───
 function applyRoomPose(roomName) {
   if (!charGroup) return;
 
   if (roomName === 'kitchen') {
-    // Кухня: сидит на стуле ЗА столом (поясной план, стол на уровне пояса), голова и плечи крупным планом
-    gsap.to(charGroup.rotation, { x: 0, y: 0, z: 0, duration: 0.5 });
-    gsap.to(charGroup.position, { x: 14, y: -0.20, z: 0.15, duration: 0.6, ease: 'power2.out' });
-    if (bones.leftArm)      gsap.to(bones.leftArm.rotation,      { x: 0.75, y: -0.20, z: -0.40, duration: 0.6 });
-    if (bones.rightArm)     gsap.to(bones.rightArm.rotation,     { x: 0.75, y: 0.20,  z: 0.40,  duration: 0.6 });
-    if (bones.leftForeArm)  gsap.to(bones.leftForeArm.rotation,  { x: 0.50, y: -0.20, z: 0,     duration: 0.6 });
-    if (bones.rightForeArm) gsap.to(bones.rightForeArm.rotation, { x: 0.50, y: 0.20,  z: 0,     duration: 0.6 });
+    // Кухня: сидит на обеденном стуле за столом, ножки и юбка спрятаны за столешницей, стабильная естественная поза рук
+    if (characterLegs) characterLegs.visible = false;
+    gsap.to(charGroup.rotation, { x: 0, y: 0, z: 0, duration: 0.7, ease: 'power2.out' });
+    gsap.to(charGroup.position, { x: 14.0, y: -0.06, z: 0.18, duration: 0.7, ease: 'power2.out' });
   } else if (roomName === 'bedroom') {
+    if (characterLegs) characterLegs.visible = true;
     if (petState.isSleeping) {
-      // Спальня (СОН): персонаж лежит ГОРИЗОНТАЛЬНО на матрасе (y = 0.74, z = 0.30), голова на подушке!
-      gsap.to(charGroup.rotation, { x: -Math.PI / 2, y: 0, z: 0, duration: 0.7, ease: 'power2.inOut' });
-      gsap.to(charGroup.position, { x: 42, y: 0.74, z: 0.30, duration: 0.7, ease: 'power2.inOut' });
-      if (bones.head)        gsap.to(bones.head.rotation,        { x: 0.10, y: 0,     z: 0.18,  duration: 0.6 });
-      if (bones.leftArm)     gsap.to(bones.leftArm.rotation,     { x: 0.35, y: -0.20, z: -0.60, duration: 0.6 });
-      if (bones.rightArm)    gsap.to(bones.rightArm.rotation,    { x: 0.35, y: 0.20,  z: 0.60,  duration: 0.6 });
-      if (bones.leftForeArm) gsap.to(bones.leftForeArm.rotation, { x: 0.20, y: 0,     z: 0,     duration: 0.6 });
-      if (bones.rightForeArm)gsap.to(bones.rightForeArm.rotation,{ x: 0.20, y: 0,     z: 0,     duration: 0.6 });
+      // Спальня (СОН): лежит на матрасе кровати (y = 0.58, z = -0.45), голова на подушке
+      gsap.to(charGroup.rotation, { x: -Math.PI / 2, y: 0, z: 0, duration: 0.7, ease: 'power2.out' });
+      gsap.to(charGroup.position, { x: 42, y: 0.58, z: -0.45, duration: 0.7, ease: 'power2.out' });
+      if (characterMesh && characterMesh.morphTargetInfluences && morphEyeBlinkIndex !== -1) {
+        characterMesh.morphTargetInfluences[morphEyeBlinkIndex] = 1.0;
+      }
     } else {
-      // Спальня при свете: стоит на коврике перед кроватью на полу (y = 0, z = 0.70)
-      gsap.to(charGroup.rotation, { x: 0, y: 0, z: 0, duration: 0.6, ease: 'power2.inOut' });
-      gsap.to(charGroup.position, { x: 42, y: 0, z: 0.70, duration: 0.6, ease: 'power2.out' });
-      setNaturalPose(charGroup);
+      // Спальня при свете: стоит на прикроватном коврике (y = 0.04, z = 0.60)
+      gsap.to(charGroup.rotation, { x: 0, y: 0, z: 0, duration: 0.7, ease: 'power2.out' });
+      gsap.to(charGroup.position, { x: 42, y: 0.04, z: 0.60, duration: 0.7, ease: 'power2.out' });
+      if (characterMesh && characterMesh.morphTargetInfluences && morphEyeBlinkIndex !== -1) {
+        characterMesh.morphTargetInfluences[morphEyeBlinkIndex] = 0;
+      }
     }
   } else if (roomName === 'bathroom') {
-    // Ванная: стоит ровно в поддоне (y = 0.02, z = 0), руки прижаты к бокам
-    gsap.to(charGroup.rotation, { x: 0, y: 0, z: 0, duration: 0.5 });
-    gsap.to(charGroup.position, { x: 28, y: 0.02, z: 0, duration: 0.6, ease: 'power2.out' });
-    if (bones.leftArm)      gsap.to(bones.leftArm.rotation,      { x: 0.15, y: 0, z: -1.25, duration: 0.6 });
-    if (bones.rightArm)     gsap.to(bones.rightArm.rotation,     { x: 0.15, y: 0, z: 1.25,  duration: 0.6 });
-    if (bones.leftForeArm)  gsap.to(bones.leftForeArm.rotation,  { x: 0.25, y: 0, z: 0,     duration: 0.6 });
-    if (bones.rightForeArm) gsap.to(bones.rightForeArm.rotation, { x: 0.25, y: 0, z: 0,     duration: 0.6 });
+    // Ванная: стоит в душевой кабине в полный рост (y = 0.08, z = 0)
+    if (characterLegs) characterLegs.visible = true;
+    gsap.to(charGroup.rotation, { x: 0, y: 0, z: 0, duration: 0.7, ease: 'power2.out' });
+    gsap.to(charGroup.position, { x: 28, y: 0.08, z: 0, duration: 0.7, ease: 'power2.out' });
   } else {
-    // Гостиная: стоит в центре ковра (y = 0, z = 0), руки свободно опущены
-    gsap.to(charGroup.rotation, { x: 0, y: 0, z: 0, duration: 0.5 });
-    gsap.to(charGroup.position, { x: 0, y: 0, z: 0, duration: 0.6, ease: 'power2.out' });
-    setNaturalPose(charGroup);
+    // Гостиная: стоит в центре ковра (y = 0.04, z = 0), естественная поза со свободно опущенными руками
+    if (characterLegs) characterLegs.visible = true;
+    gsap.to(charGroup.rotation, { x: 0, y: 0, z: 0, duration: 0.7, ease: 'power2.out' });
+    gsap.to(charGroup.position, { x: 0, y: 0.04, z: 0, duration: 0.7, ease: 'power2.out' });
   }
 }
 
@@ -1890,19 +2167,31 @@ function switchRoom(roomName) {
   $('lamp-hint')?.classList.toggle('hidden', roomName !== 'bedroom');
 
   // Плавный кинематографичный перелет камеры GSAP
+  const targetCamPos = (roomName === 'bedroom' && petState.isSleeping)
+    ? { x: 42.0, y: 1.35, z: 1.55 }
+    : cfg.camPos;
+  const targetLookAt = (roomName === 'bedroom' && petState.isSleeping)
+    ? { x: 42.0, y: 0.68, z: -0.40 }
+    : cfg.lookAt;
+
   gsap.to(camera.position, {
-    x: cfg.camPos.x, y: cfg.camPos.y, z: cfg.camPos.z,
+    x: targetCamPos.x, y: targetCamPos.y, z: targetCamPos.z,
     duration: 0.95, ease: 'power2.inOut'
   });
   gsap.to(cameraLookTarget, {
-    x: cfg.lookAt.x, y: cfg.lookAt.y, z: cfg.lookAt.z,
+    x: targetLookAt.x, y: targetLookAt.y, z: targetLookAt.z,
     duration: 0.95, ease: 'power2.inOut'
   });
 
+  if (mainDirLight) {
+    gsap.to(mainDirLight.position, { x: cfg.xOffset + 2, y: 6, z: 4, duration: 0.95, ease: 'power2.inOut' });
+    gsap.to(mainDirLight.target.position, { x: cfg.xOffset, y: 1.0, z: 0, duration: 0.95, ease: 'power2.inOut' });
+  }
+
   // Персонаж перемещается в соответствующую комнату
   if (charGroup) {
-    const targetY = (roomName === 'bedroom' && petState.isSleeping) ? 0.74 : cfg.charPos.y;
-    const targetZ = (roomName === 'bedroom' && petState.isSleeping) ? 0.30 : cfg.charPos.z;
+    const targetY = (roomName === 'bedroom' && petState.isSleeping) ? 0.58 : cfg.charPos.y;
+    const targetZ = (roomName === 'bedroom' && petState.isSleeping) ? -0.45 : cfg.charPos.z;
     gsap.to(charGroup.position, {
       x: cfg.charPos.x,
       y: targetY,
@@ -1962,21 +2251,23 @@ function deactivateBathroomTools() {
 $('tool-sponge')?.addEventListener('click', () => activateTool('sponge'));
 $('tool-shower')?.addEventListener('click', () => activateTool('shower'));
 
-// Спавн скопления мелкой полупрозрачной пены (гроздьями по 4-7 пузырьков радиусом 0.025-0.055)
+// Спавн непрерывных групп мелкой и средней полупрозрачной пены (плотная пышная шапка)
+let lastFoamTime = 0;
 function spawnFoamCluster(point) {
-  if (!charGroup || foamBubbles.length >= 45) return;
+  if (!charGroup || foamBubbles.length >= 160) return;
   playSfx('soap');
   safeHaptic('light');
 
-  const count = 4 + Math.floor(Math.random() * 4); // 4-7 мелких пузырьков в кластере
+  const count = 7 + Math.floor(Math.random() * 5); // 7-11 пузырьков в группе
   for (let i = 0; i < count; i++) {
-    const radius = 0.025 + Math.random() * 0.030; // 0.025 - 0.055 (нежный реалистичный размер)
+    if (foamBubbles.length >= 160) break;
+    const radius = 0.022 + Math.random() * 0.033; // 0.022 - 0.055
     const geo = new THREE.SphereGeometry(radius, 12, 12);
     const bubble = new THREE.Mesh(geo, foamMaterial);
 
-    const jx = (Math.random() - 0.5) * 0.05;
-    const jy = (Math.random() - 0.5) * 0.05;
-    const jz = (Math.random() - 0.5) * 0.05;
+    const jx = (Math.random() - 0.5) * 0.08;
+    const jy = (Math.random() - 0.5) * 0.08;
+    const jz = (Math.random() - 0.5) * 0.06;
 
     // Привязываем пену локально к телу персонажа
     const localPos = charGroup.worldToLocal(point.clone()).add(new THREE.Vector3(jx, jy, jz));
@@ -1988,7 +2279,7 @@ function spawnFoamCluster(point) {
 
     gsap.to(bubble.scale, {
       x: 1, y: 1, z: 1,
-      duration: 0.25,
+      duration: 0.22,
       ease: 'back.out(2)'
     });
   }
@@ -2023,19 +2314,19 @@ function initWaterDropParticles(parent) {
   parent.add(waterParticlesMesh);
 }
 
-// Смывание пены душем: сфера уменьшается в scale 0 и удаляется из сцены
+// Смывание пены душем: быстро и легко смывает группы пузырьков струями воды
 function rinseFoamUnderShower() {
   if (foamBubbles.length === 0) return;
   playSfx('shower');
   safeHaptic('light');
 
-  const removeCount = Math.min(4, foamBubbles.length);
+  const removeCount = Math.min(8, foamBubbles.length);
   for (let i = 0; i < removeCount; i++) {
     const b = foamBubbles.pop();
     if (!b) continue;
     gsap.to(b.scale, {
       x: 0, y: 0, z: 0,
-      duration: 0.22,
+      duration: 0.20,
       ease: 'power1.in',
       onComplete: () => {
         if (b.parent) b.parent.remove(b);
@@ -2043,6 +2334,11 @@ function rinseFoamUnderShower() {
       }
     });
   }
+
+  // При каждом смыве порции пены шкала чистоты растет в реальном времени
+  petState.hygiene = Math.min(100, petState.hygiene + 3);
+  saveState();
+  updateHUD();
 
   $('foam-count-txt').innerText = foamBubbles.length;
 
@@ -2061,6 +2357,7 @@ function completeShowerWash() {
   petState.hygiene = 100;
   petState.coins += 5;
   saveState();
+  updateHUD();
 
   updateSpeech('Ах, какая свежесть! Я сияю чистотой! 🧼✨');
   confetti({ particleCount: 80, spread: 60, origin: { y: 0.6 } });
@@ -2074,109 +2371,363 @@ function completeShowerWash() {
   }
 }
 
-// ─── 6. МЕХАНИКА КУХНИ: ПЕРЕТАСКИВАНИЕ И КОРМЛЕНИЕ ─────────────────────────────
-document.querySelectorAll('.btn-food').forEach(btn => {
-  btn.addEventListener('click', () => {
-    const food = btn.dataset.food;
-    const gain = parseFloat(btn.dataset.gain) || 20;
-    const emoji = btn.dataset.emoji || '🍕';
+// ─── 6. МЕХАНИКА КУХНИ: ПЕРЕТАСКИВАНИЕ ЕДЫ (DRAG AND DROP) КО РТУ ─────────────
+let isDraggingFood = false;
+let draggedFood = null;
+let dragElem = null;
 
-    if (petState.hunger >= 100 && food !== 'coffee') {
-      safeHaptic('warning');
-      updateSpeech('Я наелась, больше не влезает! 😋');
-      return;
-    }
+function getMouthScreenPos() {
+  let mouthX = window.innerWidth * 0.5;
+  let mouthY = window.innerHeight * 0.46;
+  if (charGroup && camera) {
+    // Точные мировые координаты губ персонажа:
+    // На кухне персонаж сидит за столом (y = -0.06), точная высота линии губ: y + 0.78
+    const mouthYOffset = (currentRoom === 'kitchen') ? 0.78 : 0.88;
+    const mouthZOffset = (currentRoom === 'kitchen') ? 0.16 : 0.10;
+    const targetVec = new THREE.Vector3(
+      charGroup.position.x,
+      charGroup.position.y + mouthYOffset,
+      charGroup.position.z + mouthZOffset
+    );
+    targetVec.project(camera);
+    mouthX = (targetVec.x * 0.5 + 0.5) * window.innerWidth;
+    mouthY = (-(targetVec.y * 0.5) + 0.5) * window.innerHeight;
+  }
+  return { x: mouthX, y: mouthY };
+}
 
-    safeHaptic('medium');
-    playVoiceClip('eat');
-    playSfx('eat');
+function setupFoodDrag() {
+  document.querySelectorAll('.btn-food').forEach(btn => {
+    btn.addEventListener('pointerdown', (e) => {
+      if (currentRoom !== 'kitchen') return;
+      const food = btn.dataset.food;
+      const gain = parseFloat(btn.dataset.gain) || 25;
+      const emoji = btn.dataset.emoji || '🍕';
 
-    // Анимация открывания рта перед едой
-    if (bones.jaw) {
-      gsap.to(bones.jaw.rotation, {
-        x: 0.42,
-        duration: 0.2, yoyo: true, repeat: 1, ease: 'power2.out'
-      });
-    }
-
-    // Полет кусочка еды прямо в рот
-    const rect = btn.getBoundingClientRect();
-    const flyingFood = document.createElement('div');
-    flyingFood.className = 'flying-item';
-    flyingFood.innerText = emoji;
-    flyingFood.style.left = `${rect.left + rect.width / 2}px`;
-    flyingFood.style.top  = `${rect.top}px`;
-    document.body.appendChild(flyingFood);
-
-    gsap.to(flyingFood, {
-      left: window.innerWidth * 0.5,
-      top:  window.innerHeight * 0.42,
-      scale: 0.3, opacity: 0.2, duration: 0.5, ease: 'power2.inOut',
-      onComplete: () => {
-        flyingFood.remove();
-
-        // Подпрыгивание и жевание
-        if (charGroup) {
-          gsap.to(charGroup.position, {
-            y: -0.20 + 0.04, duration: 0.15, yoyo: true, repeat: 1, ease: 'power2.out',
-            onComplete: () => applyRoomPose('kitchen')
-          });
-        }
-
-        petState.hunger = Math.min(100, petState.hunger + gain);
-        if (food === 'coffee') petState.energy = Math.min(100, petState.energy + 12);
-        else if (food === 'watermelon') petState.hygiene = Math.min(100, petState.hygiene + 8);
-        petState.coins += 2;
-        saveState();
-
-        spawnFloatingText(`+${gain}% 😋`, window.innerWidth * 0.5, window.innerHeight * 0.42);
-        updateSpeech('Хрум-хрум! Очень вкусно! 🍰🥰');
+      if (petState.hunger >= 100 && food !== 'coffee') {
+        safeHaptic('warning');
+        updateSpeech('Я наелась, больше не влезает! 😋');
+        return;
       }
+
+      isDraggingFood = true;
+      draggedFood = { food, gain, emoji, btn };
+
+      dragElem = document.createElement('div');
+      dragElem.className = 'dragged-food-item';
+      dragElem.innerText = emoji;
+      dragElem.style.left = `${e.clientX}px`;
+      dragElem.style.top  = `${e.clientY}px`;
+      dragElem.style.fontSize = '2.8rem';
+      document.body.appendChild(dragElem);
+
+      safeHaptic('light');
+      btn.style.opacity = '0.4';
+
+      // Рот приоткрывается в ожидании угощения
+      if (bones.jaw) gsap.to(bones.jaw.rotation, { x: 0.18, duration: 0.2 });
+    });
+
+    // Резервный клик: мгновенный полет ко рту если не перетаскивали
+    btn.addEventListener('click', (e) => {
+      if (isDraggingFood) return;
+      const food = btn.dataset.food;
+      const gain = parseFloat(btn.dataset.gain) || 25;
+      const emoji = btn.dataset.emoji || '🍕';
+
+      if (petState.hunger >= 100 && food !== 'coffee') {
+        safeHaptic('warning');
+        updateSpeech('Я наелась, больше не влезает! 😋');
+        return;
+      }
+
+      executeFeed(food, gain, emoji, e.clientX, e.clientY);
     });
   });
-});
 
-// ─── 7. МЕХАНИКА СПАЛЬНИ: ТОРШЕР И СОН ─────────────────────────────────────────
+  window.addEventListener('pointermove', (e) => {
+    if (!isDraggingFood || !dragElem) return;
+    dragElem.style.left = `${e.clientX}px`;
+    dragElem.style.top  = `${e.clientY}px`;
+
+    const mouth = getMouthScreenPos();
+    const dist = Math.hypot(e.clientX - mouth.x, e.clientY - mouth.y);
+    // 1. При перетаскивании еды: как только курсор ближе 140px к лицу персонажа, рот приоткрывается
+    if (dist < 140) {
+      const openProgress = Math.min(1.0, Math.max(0.0, (140 - dist) / 90));
+      dragElem.style.transform = `translate(-50%, -50%) scale(${1.0 + openProgress * 0.25})`;
+      if (bones.jaw) bones.jaw.rotation.x = THREE.MathUtils.lerp(0.0, 0.40, openProgress);
+      if (characterMesh && characterMesh.morphTargetInfluences && morphMouthIndex !== -1) {
+        characterMesh.morphTargetInfluences[morphMouthIndex] = THREE.MathUtils.lerp(0.0, 0.90, openProgress);
+      }
+    } else {
+      dragElem.style.transform = 'translate(-50%, -50%) scale(1.0)';
+      if (bones.jaw) bones.jaw.rotation.x = THREE.MathUtils.lerp(bones.jaw.rotation.x, 0, 0.2);
+      if (characterMesh && characterMesh.morphTargetInfluences && morphMouthIndex !== -1) {
+        characterMesh.morphTargetInfluences[morphMouthIndex] = THREE.MathUtils.lerp(characterMesh.morphTargetInfluences[morphMouthIndex], 0, 0.2);
+      }
+    }
+  });
+
+  const onFoodDrop = (e) => {
+    if (!isDraggingFood || !dragElem) return;
+    isDraggingFood = false;
+    if (draggedFood?.btn) draggedFood.btn.style.opacity = '1';
+
+    const mouth = getMouthScreenPos();
+    const dist = Math.hypot(e.clientX - mouth.x, e.clientY - mouth.y);
+    if (dist < 160) {
+      executeFeed(draggedFood.food, draggedFood.gain, draggedFood.emoji, e.clientX, e.clientY, dragElem);
+    } else {
+      if (bones.jaw) gsap.to(bones.jaw.rotation, { x: 0, duration: 0.2 });
+      if (characterMesh && characterMesh.morphTargetInfluences && morphMouthIndex !== -1) {
+        gsap.to(characterMesh.morphTargetInfluences, { [morphMouthIndex]: 0, duration: 0.2 });
+      }
+      gsap.to(dragElem, {
+        scale: 0.2, opacity: 0, duration: 0.22, ease: 'power2.in',
+        onComplete: () => { dragElem?.remove(); dragElem = null; }
+      });
+    }
+    draggedFood = null;
+  };
+
+  window.addEventListener('pointerup', onFoodDrop);
+  window.addEventListener('pointercancel', onFoodDrop);
+}
+
+function executeFeed(food, gain, emoji, startX, startY, existingElem = null) {
+  const mouthScreen = getMouthScreenPos();
+
+  // 1. 2D-спрайт еды сразу скрывается при отпускании
+  if (existingElem) existingElem.remove();
+  if (dragElem) { dragElem.remove(); dragElem = null; }
+
+  // 2. На уровне рта на 0.25 секунды создается маленький 3D-меш (кусочек), который плавно втягивается в рот (scale -> 0)
+  const foodColors = {
+    pizza: 0xf59e0b,
+    croissant: 0xd97706,
+    cake: 0xf472b6,
+    coffee: 0x78350f,
+    watermelon: 0xef4444
+  };
+  const color = foodColors[food] || 0xf59e0b;
+
+  const foodPieceGeo = new THREE.DodecahedronGeometry(0.038, 1);
+  const foodPieceMat = new THREE.MeshStandardMaterial({
+    color: color,
+    roughness: 0.6,
+    metalness: 0.0
+  });
+  const foodPiece = new THREE.Mesh(foodPieceGeo, foodPieceMat);
+
+  const mouthX = charGroup ? charGroup.position.x : 14.0;
+  // На кухне персонаж сидит за столом (y = -0.06), точная высота рта строго mouthTargetY = charGroup.position.y + 0.78 (строго в губы, а не в лоб!)
+  const mouthYOffset = (currentRoom === 'kitchen') ? 0.78 : 0.88;
+  const mouthTargetY = charGroup ? (charGroup.position.y + mouthYOffset) : 0.72;
+  const mouthTargetZ = charGroup ? (charGroup.position.z + 0.16) : 0.34;
+
+  // Стартовая позиция кусочка еды прямо перед сомкнутыми губами
+  foodPiece.position.set(mouthX, mouthTargetY, mouthTargetZ + 0.05);
+  foodPiece.scale.set(1, 1, 1);
+  scene.add(foodPiece);
+
+  // Втягивание строго на линии смыкания губ за 0.25 секунды с уменьшением scale -> 0
+  gsap.to(foodPiece.position, {
+    y: mouthTargetY,
+    z: mouthTargetZ - 0.08,
+    duration: 0.25,
+    ease: 'power2.in'
+  });
+
+  gsap.to(foodPiece.scale, {
+    x: 0,
+    y: 0,
+    z: 0,
+    duration: 0.25,
+    ease: 'power2.in',
+    onComplete: () => {
+      scene.remove(foodPiece);
+      foodPieceGeo.dispose();
+      foodPieceMat.dispose();
+
+      // 3. Рот закрывается, звук «ням», 3 цикла покачивания головы и челюсти
+      playVoiceClip('eat');
+      playSfx('eat');
+      safeHaptic('success');
+
+      // Закрытие рта
+      if (characterMesh && characterMesh.morphTargetInfluences && morphMouthIndex !== -1) {
+        characterMesh.morphTargetInfluences[morphMouthIndex] = 0;
+      }
+      if (bones.jaw) {
+        bones.jaw.rotation.x = 0;
+      }
+
+      // 3 цикла покачивания головы (repeat: 5 с yoyo = 3 полных колебания)
+      if (bones.head) {
+        const baseHeadX = initialBoneRots?.head?.x || 0;
+        gsap.to(bones.head.rotation, {
+          x: baseHeadX + 0.12,
+          duration: 0.14,
+          yoyo: true,
+          repeat: 5,
+          ease: 'sine.inOut',
+          onComplete: () => {
+            if (bones.head) bones.head.rotation.x = baseHeadX;
+          }
+        });
+      }
+
+      // 3 цикла движения челюсти
+      if (characterMesh && characterMesh.morphTargetInfluences && morphMouthIndex !== -1) {
+        gsap.to(characterMesh.morphTargetInfluences, {
+          [morphMouthIndex]: 0.45,
+          duration: 0.14,
+          yoyo: true,
+          repeat: 5,
+          ease: 'sine.inOut',
+          onComplete: () => {
+            if (characterMesh?.morphTargetInfluences) {
+              characterMesh.morphTargetInfluences[morphMouthIndex] = 0;
+            }
+          }
+        });
+      } else if (bones.jaw) {
+        gsap.to(bones.jaw.rotation, {
+          x: 0.22,
+          duration: 0.14,
+          yoyo: true,
+          repeat: 5,
+          ease: 'sine.inOut',
+          onComplete: () => { if (bones.jaw) bones.jaw.rotation.x = 0; }
+        });
+      }
+
+      // Начисление очков сытости
+      petState.hunger = Math.min(100, petState.hunger + gain);
+      if (food === 'coffee') petState.energy = Math.min(100, petState.energy + 12);
+      else if (food === 'watermelon') petState.hygiene = Math.min(100, petState.hygiene + 8);
+      petState.coins += 2;
+      saveState();
+      updateHUD();
+
+      spawnFloatingText(`+${gain}% 😋`, mouthScreen.x, mouthScreen.y - 30);
+      spawnHeart(mouthScreen.x, mouthScreen.y - 10);
+      updateSpeech('Ням-ням! Очень вкусно! 🍰🥰');
+
+      fetch('/api/action', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'feed' })
+      }).catch(() => {});
+    }
+  });
+}
+
+setupFoodDrag();
+
+// ─── 7. МЕХАНИКА СПАЛЬНИ: ТОРШЕР И СОН С FADE-ЗАТЕМНЕНИЕМ ────────────────────
 let sleepZInterval = null;
 
 function toggleBedroomLights() {
-  petState.isSleeping = !petState.isSleeping;
+  const willSleep = !petState.isSleeping;
+  petState.isSleeping = willSleep;
   safeHaptic('medium');
   playSfx('switch');
   saveState();
 
-  if (petState.isSleeping) {
-    playVoiceClip('yawn');
-    // Гасим торшер: полумрак в спальне, синий свет из окна
-    if (bedroomLampLight) gsap.to(bedroomLampLight, { intensity: 0.04, duration: 0.8 });
-    if (bedroomSunLight)  gsap.to(bedroomSunLight,  { intensity: 0.08, duration: 0.8 });
-    if (bedroomRimLight)  gsap.to(bedroomRimLight,  { intensity: 0.10, duration: 0.8 });
-    if (bedroomShadeMesh?.material) {
-      gsap.to(bedroomShadeMesh.material, { emissiveIntensity: 0.0, duration: 0.8 });
-    }
-    if (bedroomMoonLight) gsap.to(bedroomMoonLight, { intensity: 0.35, duration: 0.8 });
+  const overlay = $('room-fade-overlay');
 
+  if (willSleep) {
+    playVoiceClip('yawn');
     $('lamp-icon').innerText  = '☀️';
     $('lamp-label').innerText = 'ВКЛЮЧИТЬ СВЕТ (Разбудить)';
     updateSpeech('Сладких снов... Мне снишься ты 💤🌙');
-    startSleepZ();
-    applyRoomPose('bedroom');
-  } else {
-    // Включаем торшер и студийный свет
-    if (bedroomLampLight) gsap.to(bedroomLampLight, { intensity: 1.0, duration: 0.8 });
-    if (bedroomSunLight)  gsap.to(bedroomSunLight,  { intensity: 1.0, duration: 0.8 });
-    if (bedroomRimLight)  gsap.to(bedroomRimLight,  { intensity: 0.6, duration: 0.8 });
-    if (bedroomShadeMesh?.material) {
-      gsap.to(bedroomShadeMesh.material, { emissiveIntensity: 0.6, duration: 0.8 });
-    }
-    if (bedroomMoonLight) gsap.to(bedroomMoonLight, { intensity: 0.25, duration: 0.8 });
 
+    // 1. Полноэкранное черное затемнение (fade opacity 0 -> 1 за 0.4с)
+    if (overlay) {
+      gsap.to(overlay, {
+        opacity: 1,
+        duration: 0.4,
+        ease: 'power2.inOut',
+        onComplete: () => {
+          // 2. Под затемнением положить персонажа на матрас (y = 0.58, z = -0.45, rotation x = -Math.PI / 2, глаза закрыты)
+          if (charGroup) {
+            charGroup.position.set(42, 0.58, -0.45);
+            charGroup.rotation.set(-Math.PI / 2, 0, 0);
+          }
+          if (characterMesh && characterMesh.morphTargetInfluences && morphEyeBlinkIndex !== -1) {
+            characterMesh.morphTargetInfluences[morphEyeBlinkIndex] = 1.0;
+          }
+
+          // Фокус камеры прямо на кровать
+          camera.position.set(42.0, 1.35, 1.55);
+          cameraLookTarget.set(42.0, 0.68, -0.40);
+
+          // Основной свет приглушается, включается ночник (bedroomLampLight)
+          if (ambientLight)     ambientLight.intensity = 0.10;
+          if (mainDirLight)     mainDirLight.intensity = 0.05;
+          if (bedroomLampLight) bedroomLampLight.intensity = 1.1;
+          if (bedroomShadeMesh?.material) bedroomShadeMesh.material.emissiveIntensity = 0.85;
+
+          // 3. Затемнение уходит (1 -> 0), запускаются Zzz
+          gsap.to(overlay, {
+            opacity: 0,
+            duration: 0.5,
+            delay: 0.05,
+            ease: 'power2.inOut',
+            onComplete: () => {
+              startSleepZ();
+            }
+          });
+        }
+      });
+    }
+  } else {
+    // Зеркальный fade при пробуждении
     $('lamp-icon').innerText  = '🌙';
     $('lamp-label').innerText = 'ВЫКЛЮЧИТЬ СВЕТ (Уложить спать)';
     updateSpeech('Доброе утро! Я выспалась и полна сил! ☀️✨');
     stopSleepZ();
-    applyRoomPose('bedroom');
-    triggerSquashAndStretch();
+
+    if (overlay) {
+      gsap.to(overlay, {
+        opacity: 1,
+        duration: 0.4,
+        ease: 'power2.inOut',
+        onComplete: () => {
+          // Под затемнением: персонаж встает на коврик (y = 0.04, z = 0.60, rotation 0,0,0) без клиппинга геометрии
+          if (charGroup) {
+            charGroup.position.set(42, 0.04, 0.60);
+            charGroup.rotation.set(0, 0, 0);
+          }
+          if (characterMesh && characterMesh.morphTargetInfluences && morphEyeBlinkIndex !== -1) {
+            characterMesh.morphTargetInfluences[morphEyeBlinkIndex] = 0;
+          }
+
+          // Возврат камеры в исходное положение спальни (полный рост)
+          camera.position.set(ROOM_CONFIGS.bedroom.camPos.x, ROOM_CONFIGS.bedroom.camPos.y, ROOM_CONFIGS.bedroom.camPos.z);
+          cameraLookTarget.set(ROOM_CONFIGS.bedroom.lookAt.x, ROOM_CONFIGS.bedroom.lookAt.y, ROOM_CONFIGS.bedroom.lookAt.z);
+
+          // Дневной сбалансированный свет
+          if (ambientLight)     ambientLight.intensity = 0.65;
+          if (mainDirLight)     mainDirLight.intensity = 0.55;
+          if (bedroomLampLight) bedroomLampLight.intensity = 0.25;
+          if (bedroomShadeMesh?.material) bedroomShadeMesh.material.emissiveIntensity = 0.5;
+
+          // Затемнение уходит (1 -> 0)
+          gsap.to(overlay, {
+            opacity: 0,
+            duration: 0.5,
+            delay: 0.05,
+            ease: 'power2.inOut',
+            onComplete: () => {
+              triggerSquashAndStretch();
+            }
+          });
+        }
+      });
+    }
   }
 }
 
@@ -2212,6 +2763,20 @@ function stopSleepZ() {
 
 // ─── 8. ТАЧ И КЛИКИ (ПОГЛАЖИВАНИЕ ЩЕЧЕК, ГУБКА, ДУШ, ТОРШЕР) ───────────────────
 function setupInteractions() {
+  let isPointerDown = false;
+  let lastStrokeX = 0;
+  let lastStrokeY = 0;
+  let petStrokeDist = 0;
+  let lastStrokeTriggerTime = 0;
+
+  const onPointerDown = (e) => {
+    isPointerDown = true;
+    const t = e.touches ? e.touches[0] : e;
+    lastStrokeX = t.clientX;
+    lastStrokeY = t.clientY;
+    petStrokeDist = 0;
+  };
+
   const onPointerMove = (e) => {
     const t = e.touches ? e.touches[0] : e;
     const r = wrap.getBoundingClientRect();
@@ -2225,27 +2790,33 @@ function setupInteractions() {
       cursor.style.top  = `${t.clientY}px`;
     }
 
-    // Если активна губка в ванной: спавним пену скоплениями в точке касания к персонажу
+    // Если активна губка в ванной: непрерывно спавним плотные группы пены при вождении по персонажу
     if (currentRoom === 'bathroom' && activeBathroomTool === 'sponge' && charGroup) {
-      const mouse = new THREE.Vector2(
-        ((t.clientX - r.left) / r.width) * 2 - 1,
-        -(((t.clientY - r.top) / r.height) * 2 - 1)
-      );
-      const raycaster = new THREE.Raycaster();
-      raycaster.setFromCamera(mouse, camera);
-      const hits = raycaster.intersectObject(charGroup, true);
+      const now = Date.now();
+      if (now - lastFoamTime > 35) {
+        const mouse = new THREE.Vector2(
+          ((t.clientX - r.left) / r.width) * 2 - 1,
+          -(((t.clientY - r.top) / r.height) * 2 - 1)
+        );
+        const raycaster = new THREE.Raycaster();
+        raycaster.setFromCamera(mouse, camera);
+        const hits = raycaster.intersectObject(charGroup, true);
 
-      if (hits.length > 0 && Math.random() > 0.4) {
-        spawnFoamCluster(hits[0].point);
-      } else {
-        const nearCenter = Math.abs(t.clientX - window.innerWidth / 2) < 130;
-        if (nearCenter && Math.random() > 0.5) {
-          const approxPoint = new THREE.Vector3(
-            charGroup.position.x + (Math.random() - 0.5) * 0.25,
-            charGroup.position.y + 0.45 + (Math.random() - 0.5) * 0.35,
-            charGroup.position.z + 0.15
-          );
-          spawnFoamCluster(approxPoint);
+        if (hits.length > 0) {
+          spawnFoamCluster(hits[0].point);
+          lastFoamTime = now;
+        } else {
+          const nearCenter = Math.abs(t.clientX - window.innerWidth / 2) < 140;
+          const inTorsoZone = t.clientY > window.innerHeight * 0.18 && t.clientY < window.innerHeight * 0.76;
+          if (nearCenter && inTorsoZone) {
+            const approxPoint = new THREE.Vector3(
+              charGroup.position.x + (Math.random() - 0.5) * 0.22,
+              charGroup.position.y + 0.50 + (Math.random() - 0.5) * 0.35,
+              charGroup.position.z + 0.12
+            );
+            spawnFoamCluster(approxPoint);
+            lastFoamTime = now;
+          }
         }
       }
     }
@@ -2255,13 +2826,88 @@ function setupInteractions() {
       if (waterParticlesMesh) waterParticlesMesh.visible = true;
       rinseFoamUnderShower();
     }
+
+    // ── МЕХАНИКА ПОГЛАЖИВАНИЯ / ЩЕКОТКИ ЩЕЧЕК И ГОЛОВЫ (TALKING TOM STYLE) ──
+    if (!activeBathroomTool && !isDraggingFood && !petState.isSleeping && charGroup) {
+      const dx = t.clientX - lastStrokeX;
+      const dy = t.clientY - lastStrokeY;
+      const dist = Math.hypot(dx, dy);
+
+      // Проверка попадания в область головы и тела персонажа (по центру экрана)
+      const nearCharCenter = Math.abs(t.clientX - window.innerWidth / 2) < (window.innerWidth * 0.28);
+      const inUpperBodyZone = t.clientY > window.innerHeight * 0.18 && t.clientY < window.innerHeight * 0.72;
+
+      if (nearCharCenter && inUpperBodyZone) {
+        // Легкий игровой наклон головы за направлением движения пальца/курсора
+        if (bones.head) {
+          const tiltFactor = Math.max(-0.25, Math.min(0.25, dx * 0.015));
+          bones.head.rotation.z = THREE.MathUtils.lerp(bones.head.rotation.z, tiltFactor, 0.2);
+        }
+
+        if (isPointerDown || e.touches) {
+          petStrokeDist += dist;
+          const now = Date.now();
+          if (petStrokeDist > 75 && (now - lastStrokeTriggerTime > 550)) {
+            lastStrokeTriggerTime = now;
+            petStrokeDist = 0;
+
+            // Воспроизводим милый смешок и щекотку
+            playVoiceClip('giggle');
+            playSfx('tap');
+            safeHaptic('light');
+
+            // Улыбка рта через Morph Target
+            if (characterMesh && characterMesh.morphTargetInfluences && morphMouthIndex !== -1) {
+              gsap.to(characterMesh.morphTargetInfluences, {
+                [morphMouthIndex]: 0.45,
+                duration: 0.18,
+                yoyo: true,
+                repeat: 1,
+                ease: 'power1.inOut'
+              });
+            }
+
+            // Игривый кивок головой
+            if (bones.head) {
+              const dir = dx >= 0 ? 0.18 : -0.18;
+              gsap.to(bones.head.rotation, {
+                z: dir,
+                duration: 0.22,
+                yoyo: true,
+                repeat: 1,
+                ease: 'power2.out'
+              });
+            }
+
+            // Вылетающие сердечки прямо из точки поглаживания
+            spawnHeart(t.clientX, t.clientY);
+
+            // Пополнение шкалы веселья
+            petState.fun = Math.min(100, petState.fun + 4);
+            petState.coins += 1;
+            saveState();
+            updateHUD();
+            updateSpeech('М-м-м, щекотно и приятно! 🥰💖');
+          }
+        }
+      }
+      lastStrokeX = t.clientX;
+      lastStrokeY = t.clientY;
+    }
   };
 
+  window.addEventListener('mousedown', onPointerDown);
+  window.addEventListener('touchstart', onPointerDown, { passive: true });
   window.addEventListener('mousemove', onPointerMove);
   window.addEventListener('touchmove', onPointerMove, { passive: true });
 
   const onPointerUp = () => {
+    isPointerDown = false;
+    petStrokeDist = 0;
     if (waterParticlesMesh) waterParticlesMesh.visible = false;
+    if (bones.head && !petState.isSleeping) {
+      gsap.to(bones.head.rotation, { z: 0, duration: 0.35, ease: 'power2.out' });
+    }
   };
   window.addEventListener('mouseup', onPointerUp);
   window.addEventListener('touchend', onPointerUp);
@@ -2287,6 +2933,58 @@ function setupInteractions() {
     // Клик/тап по персонажу: щекотка и поглаживание щечек
     triggerSquashAndStretch();
   });
+
+  // Кнопка «Пощекотать» в Гостиной
+  $('btn-tickle')?.addEventListener('click', () => {
+    if (petState.isSleeping) {
+      updateSpeech('Она сладко спит... zZz 😴');
+      return;
+    }
+    safeHaptic('medium');
+    playSfx('tap');
+    playVoiceClip('giggle');
+
+    if (bones.head) {
+      gsap.to(bones.head.rotation, {
+        z: 0.22,
+        duration: 0.16,
+        yoyo: true,
+        repeat: 3,
+        ease: 'power1.inOut',
+        onComplete: () => { if (bones.head) bones.head.rotation.z = 0; }
+      });
+    }
+
+    if (charGroup) {
+      gsap.killTweensOf(charGroup.scale);
+      gsap.to(charGroup.scale, {
+        x: baseScale * 1.14, y: baseScale * 0.86, z: baseScale * 1.14,
+        duration: 0.15, ease: 'power2.out',
+        onComplete: () => {
+          gsap.to(charGroup.scale, {
+            x: baseScale, y: baseScale, z: baseScale,
+            duration: 0.55, ease: 'elastic.out(1.2, 0.3)'
+          });
+        }
+      });
+    }
+
+    // Салют из сердечек
+    for (let i = 0; i < 4; i++) {
+      setTimeout(() => {
+        spawnHeart(
+          window.innerWidth / 2 + (Math.random() - 0.5) * 100,
+          window.innerHeight * 0.40 + (Math.random() - 0.5) * 80
+        );
+      }, i * 90);
+    }
+
+    petState.fun = Math.min(100, petState.fun + 15);
+    petState.coins += 2;
+    saveState();
+    updateHUD();
+    updateSpeech('Хи-хи-хи! Хватит щекотать, щекотно же! 😆💖');
+  });
 }
 
 function triggerSquashAndStretch() {
@@ -2307,29 +3005,78 @@ function triggerSquashAndStretch() {
     }
   });
   spawnHeart(window.innerWidth / 2, window.innerHeight * 0.42);
+
+  petState.fun = Math.min(100, petState.fun + 3);
+  saveState();
+  updateHUD();
 }
 
-// ─── 9. МОРГАНИЕ И ЦИКЛ РЕНДЕРА (IDLE ДЫХАНИЕ, LIP-SYNC LERP 0.15) ────────────
+// ─── 9. МОРГАНИЕ И ЦИКЛ РЕНДЕРА (IDLE ДЫХАНИЕ, LIP-SYNC LERP, NO HEAD SCALE) ─
 function triggerBlink() {
-  if (isBlinking || !bones.head || petState.isSleeping) return;
+  if (isBlinking || petState.isSleeping) return;
   isBlinking = true;
-  gsap.to(bones.head.scale, {
-    y: 0.92, duration: 0.075, yoyo: true, repeat: 1, ease: 'power1.inOut',
-    onComplete: () => {
-      if (bones.head && !isSpeaking) bones.head.scale.y = 1.0;
-      isBlinking = false;
-    }
-  });
+
+  if (characterMesh && characterMesh.morphTargetInfluences && morphEyeBlinkIndex !== -1) {
+    gsap.to(characterMesh.morphTargetInfluences, {
+      [morphEyeBlinkIndex]: 1.0,
+      duration: 0.075,
+      yoyo: true,
+      repeat: 1,
+      ease: 'power1.inOut',
+      onComplete: () => {
+        isBlinking = false;
+        scheduleNextBlink();
+      }
+    });
+  } else if (bones.head) {
+    // Безопасный естественный наклон головы без скейлинга
+    const origX = bones.head.rotation.x;
+    gsap.to(bones.head.rotation, {
+      x: origX + 0.025,
+      duration: 0.08,
+      yoyo: true,
+      repeat: 1,
+      ease: 'power1.inOut',
+      onComplete: () => {
+        if (bones.head) bones.head.scale.set(1, 1, 1);
+        isBlinking = false;
+        scheduleNextBlink();
+      }
+    });
+  } else {
+    isBlinking = false;
+    scheduleNextBlink();
+  }
 }
-setInterval(() => {
-  if (!petState.isSleeping && Math.random() > 0.15) triggerBlink();
-}, 4500);
+
+function scheduleNextBlink() {
+  if (nextBlinkTimer) clearTimeout(nextBlinkTimer);
+  const delay = 3000 + Math.random() * 2500; // каждые 3-5.5 секунд
+  nextBlinkTimer = setTimeout(() => {
+    if (!petState.isSleeping) triggerBlink();
+  }, delay);
+}
+scheduleNextBlink();
+
+// ─── ПРИНУДИТЕЛЬНАЯ СИНХРОНИЗАЦИЯ ПОЗЫ РУК (БЕЗ A-POSE, ~25°) ───────────────
+function applyArmPose() {
+  if (characterMesh) {
+    applyProceduralArmPose(characterMesh, armLiftAmount);
+  }
+}
 
 function animate() {
   requestAnimationFrame(animate);
   if (!scene || !renderer) return;
 
+  // Юбка и ноги строго скрыты на кухне (так как сидит за глухой столешницей)
+  if (characterLegs) {
+    characterLegs.visible = (currentRoom !== 'kitchen');
+  }
+
+  const delta = clock.getDelta();
   const time = clock.getElapsedTime();
+  if (mixer) mixer.update(delta);
 
   // Плавный Look-At камеры
   camera.lookAt(cameraLookTarget.x, cameraLookTarget.y, cameraLookTarget.z);
@@ -2338,34 +3085,55 @@ function animate() {
   pointer.x = THREE.MathUtils.lerp(pointer.x, targetPointer.x, 0.08);
   pointer.y = THREE.MathUtils.lerp(pointer.y, targetPointer.y, 0.08);
 
-  // ── Сглаженный Lip-Sync LERP 0.15 ──
+  // ── Lip-Sync с Audio Smoothing, Noise Gate и Two-Phase LERP ──
   let targetVolume = 0;
-  if (isSpeaking && playbackAnalyser) {
-    const fData = new Uint8Array(playbackAnalyser.frequencyBinCount);
-    playbackAnalyser.getByteFrequencyData(fData);
-    let fSum = 0;
-    for (let i = 0; i < fData.length; i++) fSum += fData[i];
-    targetVolume = Math.min(1.0, (fSum / fData.length) / 55.0);
+  if (isSpeaking) {
+    if (currentVoiceAudio && voiceVolumeCurve) {
+      // Прямой расчет из огибающей аудиодорожки (аппаратно синхронизировано, 0 аллокаций памяти)
+      const idx = Math.floor(currentVoiceAudio.currentTime / 0.04);
+      if (idx >= 0 && idx < voiceVolumeCurve.length) {
+        targetVolume = voiceVolumeCurve[idx];
+      }
+    } else if (playbackAnalyser) {
+      // Fallback на AnalyserNode БЕЗ повторного создания Uint8Array в каждом кадре
+      if (!lipSyncFreqData || lipSyncFreqData.length !== playbackAnalyser.frequencyBinCount) {
+        lipSyncFreqData = new Uint8Array(playbackAnalyser.frequencyBinCount);
+      }
+      playbackAnalyser.getByteFrequencyData(lipSyncFreqData);
+      let fSum = 0;
+      for (let i = 0; i < lipSyncFreqData.length; i++) fSum += lipSyncFreqData[i];
+      const rawVolume = (fSum / lipSyncFreqData.length) / 55.0;
+      // Noise Gate: если громкость ниже 0.04, рот моментально закрывается
+      if (rawVolume >= 0.04) {
+        targetVolume = Math.min(1.0, rawVolume);
+      } else {
+        targetVolume = 0;
+      }
+    }
   }
-  smoothedVolume += (targetVolume - smoothedVolume) * 0.15;
+
+  // Двухфазный LERP: быстрый подъем (attack = 0.35) и плавный спад (decay = 0.08)
+  const lerpFactor = targetVolume > smoothedVolume ? 0.35 : 0.08;
+  smoothedVolume += (targetVolume - smoothedVolume) * lerpFactor;
+  if (smoothedVolume < 0.005) smoothedVolume = 0;
 
   if (charGroup) {
     if (!petState.isSleeping) {
-      // 1. Плавное процедурное дыхание и жизнь тела (Talking Tom style)
-      const breathPulse = Math.sin(time * 2.5) * 0.008;
+      // 1. Плавное процедурное дыхание тела и покачивание (Talking Tom style)
+      const breathPulse = Math.sin(time * 2.0) * 0.007;
       if (currentRoom === 'living') {
-        charGroup.position.y = 0 + breathPulse;
-        // Мягкое покачивание рук в естественной позе
-        if (bones.leftArm)  bones.leftArm.rotation.z  = -1.15 + Math.sin(time * 1.5 + 0.4) * 0.02;
-        if (bones.rightArm) bones.rightArm.rotation.z =  1.15 - Math.sin(time * 1.5 + 0.4) * 0.02;
+        charGroup.position.y = 0.04 + breathPulse;
       } else if (currentRoom === 'bathroom') {
-        charGroup.position.y = 0.02 + breathPulse;
-        if (bones.leftArm)  bones.leftArm.rotation.z  = -1.25 + Math.sin(time * 1.5 + 0.4) * 0.02;
-        if (bones.rightArm) bones.rightArm.rotation.z =  1.25 - Math.sin(time * 1.5 + 0.4) * 0.02;
+        charGroup.position.y = 0.08 + breathPulse;
       } else if (currentRoom === 'kitchen') {
-        charGroup.position.y = -0.20 + breathPulse * 0.5;
+        charGroup.position.y = -0.06 + breathPulse * 0.7;
       } else if (currentRoom === 'bedroom') {
-        charGroup.position.y = 0 + breathPulse;
+        charGroup.position.y = 0.04 + breathPulse;
+      }
+
+      // Микро-движение позвоночника при дыхании
+      if (bones.spine) {
+        bones.spine.rotation.x = Math.sin(time * 2.0) * 0.012;
       }
 
       // 2. Оживление взгляда и головы (animateLife): покачивание + слежение за курсором
@@ -2376,24 +3144,28 @@ function animate() {
         const targetHeadX = -(pointer.y * 0.18) + lifeHeadX;
         bones.head.rotation.y = THREE.MathUtils.lerp(bones.head.rotation.y, targetHeadY, 0.08);
         bones.head.rotation.x = THREE.MathUtils.lerp(bones.head.rotation.x, targetHeadX, 0.08);
+        // Защита от деформации масштаба: голова строго фиксирована в масштабе (1, 1, 1)
+        bones.head.scale.set(1, 1, 1);
       }
 
-      // 3. Сглаженная анимация рта (Lip-Sync)
-      if (bones.jaw) {
-        bones.jaw.rotation.x = smoothedVolume * 0.45;
-      } else if (isSpeaking && smoothedVolume > 0.02) {
-        if (bones.head && !isBlinking) {
-          bones.head.scale.y = 1.0 - smoothedVolume * 0.08;
-          bones.head.scale.x = 1.0 + smoothedVolume * 0.04;
-          bones.head.rotation.x = smoothedVolume * 0.18;
+      // 3. Dual-Path Lip-Sync (Морфы рта clamp 0.85 или кость челюсти clamp 0.38 / микро-наклон головы БЕЗ изменения scale)
+      const mouthOpening = Math.min(smoothedVolume, 0.85);
+      if (characterMesh && characterMesh.morphTargetInfluences && morphMouthIndex !== -1) {
+        // Path 1: Morph Target (mouthOpen, jawOpen, viseme_aa)
+        characterMesh.morphTargetInfluences[morphMouthIndex] = mouthOpening;
+      } else if (bones.jaw) {
+        // Path 2a: Кость челюсти
+        bones.jaw.rotation.x = Math.min(smoothedVolume * 0.35, 0.38);
+      } else if (bones.head) {
+        // Path 2b: Естественный микро-наклон головы при речи без какого-либо сжатия
+        if (isSpeaking && smoothedVolume > 0.04) {
+          bones.head.rotation.x += Math.min(smoothedVolume * 0.06, 0.08);
         }
-      } else if (!isSpeaking && !isBlinking && bones.head) {
-        bones.head.scale.set(1, 1, 1);
       }
     } else {
       // Спящий режим: легкое размеренное дыхание лежа на кровати
       if (currentRoom === 'bedroom') {
-        charGroup.position.y = 0.74 + Math.sin(time * 1.0) * 0.003;
+        charGroup.position.y = 0.62 + Math.sin(time * 1.0) * 0.003;
       }
     }
   }
@@ -2423,6 +3195,9 @@ function animate() {
     waterParticlesMesh.geometry.attributes.position.needsUpdate = true;
   }
 
+  // Принудительная синхронизация позы рук строго перед отрисовкой кадра
+  applyArmPose();
+
   renderer.render(scene, camera);
 }
 
@@ -2450,6 +3225,12 @@ let voiceScriptNode = null;
 let vadAnalyserNode = null;
 let playbackAnalyser = null;
 
+let currentVoiceAudio = null;
+let currentVoiceBlobUrl = null;
+let voiceVolumeCurve = null;
+let lipSyncFreqData = null;
+let isVoiceProcessing = false;
+
 let isRepeaterActive = false;
 let isRecordingVoice = false;
 let isSpeaking = false;
@@ -2457,7 +3238,7 @@ let recordedChunks = [];
 let lastSpeechTime = 0;
 
 const VAD_THRESHOLD = 0.022;
-const SILENCE_TIMEOUT = 600;
+const SILENCE_TIMEOUT = 1000; // 1.0с естественной паузы речи, чтобы фразы не обрывались после первого слова
 
 function showVoiceBadge(status) {
   const badge = $('voice-status');
@@ -2484,6 +3265,10 @@ function showVoiceBadge(status) {
     badge.classList.add('bg-emerald-600/90', 'border-emerald-300', 'text-white');
     if (dot) dot.className = 'w-2.5 h-2.5 rounded-full bg-emerald-200 animate-pulse';
     if (txt) txt.innerText = 'Жду голос... 👂';
+  } else if (status === 'error' || status === 'rvc_offline') {
+    badge.classList.add('bg-amber-600/95', 'border-amber-300', 'text-white');
+    if (dot) dot.className = 'w-2.5 h-2.5 rounded-full bg-yellow-200 animate-ping';
+    if (txt) txt.innerText = '⚠️ Запустите local_rvc/run_rvc.bat для синтеза голоса!';
   }
 }
 
@@ -2535,6 +3320,19 @@ async function toggleVoiceRepeater() {
     isRepeaterActive = false;
     isRecordingVoice = false;
     isSpeaking = false;
+    isVoiceProcessing = false;
+    if (currentVoiceAudio) {
+      try {
+        currentVoiceAudio.pause();
+        currentVoiceAudio.currentTime = 0;
+      } catch (_) {}
+      currentVoiceAudio = null;
+    }
+    if (currentVoiceBlobUrl) {
+      URL.revokeObjectURL(currentVoiceBlobUrl);
+      currentVoiceBlobUrl = null;
+    }
+    voiceVolumeCurve = null;
     recordedChunks = [];
     hideVoiceBadge();
     btn?.classList.remove('bg-gradient-to-r', 'from-purple-500', 'to-pink-500', 'text-white', 'border-transparent', 'shadow-md', 'animate-pulse');
@@ -2555,6 +3353,14 @@ async function toggleVoiceRepeater() {
     }
     if (voiceAudioCtx.state === 'suspended') {
       await voiceAudioCtx.resume();
+    }
+
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      if (window.location.protocol !== 'https:' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+        alert('Браузер блокирует микрофон по незащищенному сетевому адресу (' + window.location.hostname + ')!\n\nКак включить:\n1) На этом компьютере просто откройте: http://localhost:5000 (Chrome автоматически разрешает микрофон для localhost)\n\n2) Или для доступа с телефона запустите start_https.bat и перейдите на https://' + window.location.host);
+        return;
+      }
+      throw new Error('navigator.mediaDevices.getUserMedia не поддерживается в этом браузере.');
     }
 
     if (!micMediaStream) {
@@ -2581,7 +3387,7 @@ async function toggleVoiceRepeater() {
 
       voiceScriptNode = voiceAudioCtx.createScriptProcessor(2048, 1, 1);
       voiceScriptNode.onaudioprocess = (e) => {
-        if (!isRepeaterActive || isSpeaking) return;
+        if (!isRepeaterActive || isSpeaking || isVoiceProcessing) return;
         const input = e.inputBuffer.getChannelData(0);
         let sum = 0;
         for (let i = 0; i < input.length; i++) sum += input[i] * input[i];
@@ -2632,14 +3438,20 @@ async function toggleVoiceRepeater() {
     playSfx('fanfare');
   } catch (err) {
     console.error('Ошибка доступа к микрофону:', err);
-    alert('Пожалуйста, разрешите доступ к микрофону в настройках браузера или Telegram, чтобы Лёля могла повторять ваш голос! 🎙️');
+    if (window.location.protocol !== 'https:' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+      alert('🔒 Chrome блокирует микрофон по незащищенному IP (' + window.location.hostname + ')!\n\nРешение:\n1) На компьютере откройте: http://localhost:5000 (в Chrome микрофон разрешен для localhost без HTTPS!)\n\n2) Для смартфона по Wi-Fi: запустите start_https.bat и перейдите на https://' + window.location.hostname + ':5000');
+    } else {
+      alert('Пожалуйста, разрешите доступ к микрофону в настройках браузера, чтобы Лёля могла повторять ваш голос! 🎙️');
+    }
   }
 }
 
-// Отправка в Colab RVC с переключением на Web Audio API в случае недоступности
+// Обработка записанной фразы: сквозное эхо (Pass-through Echo) с синхронным липсинком
 function handleRecordedVoicePhrase() {
   if (recordedChunks.length === 0 || !voiceAudioCtx) return;
+  if (isSpeaking || isVoiceProcessing) return;
 
+  isVoiceProcessing = true;
   let totalLength = 0;
   for (let c of recordedChunks) totalLength += c.length;
   const merged = new Float32Array(totalLength);
@@ -2651,20 +3463,16 @@ function handleRecordedVoicePhrase() {
   recordedChunks = [];
 
   showVoiceBadge('processing');
-  updateSpeech('Преобразую твой голосок... ✨🔄');
+  updateSpeech('Слушаю тебя... ✨🎶');
 
   const wavBlob = bufferToWavBlob(merged, voiceAudioCtx.sampleRate);
   const formData = new FormData();
   formData.append('audio', wavBlob, 'recording.wav');
-  // Параметры RVC: f0_up_key = 5, index_rate = 0.9 (убираем мультяшность)
-  formData.append('f0_up_key', '5');
-  formData.append('index_rate', '0.9');
-  formData.append('filter_radius', '3');
-  formData.append('rms_mix_rate', '0.25');
-  formData.append('protect', '0.33');
+  formData.append('mode', 'passthrough');
+  formData.append('use_rvc', 'false');
 
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 14000);
+  const timeoutId = setTimeout(() => controller.abort(), 15000);
 
   fetch('/api/repeat_voice', {
     method: 'POST',
@@ -2673,105 +3481,92 @@ function handleRecordedVoicePhrase() {
   })
   .then(async (res) => {
     clearTimeout(timeoutId);
-    if (!res.ok) throw new Error('Colab status: ' + res.status);
+    isVoiceProcessing = false;
+    if (!res.ok) throw new Error('Voice server HTTP error: ' + res.status);
     const contentType = res.headers.get('content-type') || '';
-    if (!contentType.includes('audio') && !contentType.includes('octet-stream')) {
-      throw new Error('Not audio content');
+    if (contentType.includes('application/json')) {
+      const json = await res.json();
+      if (json.status === 'fallback' || json.use_client_synth) {
+        await playVoiceAudioBlob(wavBlob);
+        return;
+      }
     }
-    const arrayBuffer = await res.arrayBuffer();
-    const decoded = await voiceAudioCtx.decodeAudioData(arrayBuffer);
-    playDecodedBuffer(decoded, true);
+    const audioBlob = await res.blob();
+    await playVoiceAudioBlob(audioBlob);
   })
-  .catch((err) => {
+  .catch(async (err) => {
     clearTimeout(timeoutId);
-    console.warn('Colab RVC недоступен или ошибка (' + err.message + '), переключаем на Web Audio API:', err);
-    playClientWebAudioFallback(merged);
+    isVoiceProcessing = false;
+    console.warn('Voice pass-through fallback directly to recorded wav:', err);
+    await playVoiceAudioBlob(wavBlob);
   });
 }
 
-function playDecodedBuffer(buffer, isColab = false) {
-  if (!voiceAudioCtx || !buffer) return;
-  isSpeaking = true;
-  showVoiceBadge('speaking');
-  updateSpeech(isColab ? 'Хи-хи, слушай мой настоящий голосок! 🌸🎙️' : 'Хи-хи, слушай как звучит! 🎶✨');
-
-  const source = voiceAudioCtx.createBufferSource();
-  source.buffer = buffer;
-
-  playbackAnalyser = voiceAudioCtx.createAnalyser();
-  playbackAnalyser.fftSize = 256;
-  playbackAnalyser.smoothingTimeConstant = 0.3;
-
-  source.connect(playbackAnalyser);
-  playbackAnalyser.connect(voiceAudioCtx.destination);
-
-  source.start(0);
-
-  if (charGroup) {
-    gsap.to(charGroup.rotation, {
-      z: 0.05, duration: 0.16, yoyo: true, repeat: 7, ease: 'sine.inOut',
-      onComplete: () => { if (charGroup) charGroup.rotation.z = 0; }
-    });
-  }
-
-  source.onended = () => {
-    isSpeaking = false;
-    if (isRepeaterActive) {
-      showVoiceBadge('waiting');
-      updateSpeech('Скажи что-нибудь ещё, я повторю! 💖🎙️');
-    } else {
-      hideVoiceBadge();
+// Быстрый расчет огибающей громкости для точной и плавной анимации рта
+async function extractVolumeCurveFromBlob(blob) {
+  try {
+    const arrayBuffer = await blob.arrayBuffer();
+    if (!voiceAudioCtx) {
+      voiceAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
     }
-    petState.fun = Math.min(100, petState.fun + 8);
-    petState.coins += 2;
-    saveState();
-    updateHUD();
-
-    fetch('/api/action', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'voice' })
-    }).catch(() => {});
-  };
+    const audioBuffer = await voiceAudioCtx.decodeAudioData(arrayBuffer.slice(0));
+    const channelData = audioBuffer.getChannelData(0);
+    const step = Math.floor(audioBuffer.sampleRate * 0.04); // 40мс квант (25 fps)
+    const count = Math.ceil(channelData.length / step);
+    const curve = new Float32Array(count);
+    for (let i = 0; i < count; i++) {
+      let sum = 0;
+      const start = i * step;
+      const end = Math.min(start + step, channelData.length);
+      const len = end - start;
+      if (len > 0) {
+        for (let j = start; j < end; j++) {
+          sum += channelData[j] * channelData[j];
+        }
+        const rms = Math.sqrt(sum / len);
+        curve[i] = Math.min(1.0, rms * 4.0);
+      }
+    }
+    return curve;
+  } catch (e) {
+    console.warn('[LipSync] Ошибка вычисления огибающей:', e);
+    return null;
+  }
 }
 
-function playClientWebAudioFallback(mergedSamples) {
-  if (!voiceAudioCtx || !mergedSamples || mergedSamples.length === 0) return;
+// Воспроизведение через нативный HTML5 Audio (чистый звук без заиканий и сдвигов частоты)
+async function playVoiceAudioBlob(blob) {
+  if (!blob) return;
+
+  // Останавливаем любое активное воспроизведение
+  if (currentVoiceAudio) {
+    try {
+      currentVoiceAudio.pause();
+      currentVoiceAudio.currentTime = 0;
+    } catch (_) {}
+    currentVoiceAudio = null;
+  }
+  if (currentVoiceBlobUrl) {
+    URL.revokeObjectURL(currentVoiceBlobUrl);
+    currentVoiceBlobUrl = null;
+  }
+
   isSpeaking = true;
   showVoiceBadge('speaking');
-  updateSpeech('Хи-хи, слушай мой голосок! 🌸✨');
+  updateSpeech('Повторяю за тобой! 🎙️✨');
 
-  const buffer = voiceAudioCtx.createBuffer(1, mergedSamples.length, voiceAudioCtx.sampleRate);
-  buffer.copyToChannel(mergedSamples, 0);
+  // Рассчитываем огибающую громкости перед стартом, чтобы липсинк с 0-й секунды был точен
+  try {
+    voiceVolumeCurve = await extractVolumeCurveFromBlob(blob);
+  } catch (_) {
+    voiceVolumeCurve = null;
+  }
 
-  // Естественный женский тембр без эффекта бурундука
-  const source = voiceAudioCtx.createBufferSource();
-  source.buffer = buffer;
-  source.playbackRate.value = 1.0;
-
-  // 2. Формантные фильтры F1, F2, F3 с Q=2.5
-  const f1 = voiceAudioCtx.createBiquadFilter();
-  f1.type = 'peaking'; f1.frequency.value = TARGET_F1; f1.Q.value = 2.5; f1.gain.value = 4.0;
-
-  const f2 = voiceAudioCtx.createBiquadFilter();
-  f2.type = 'peaking'; f2.frequency.value = TARGET_F2; f2.Q.value = 2.5; f2.gain.value = 4.5;
-
-  const f3 = voiceAudioCtx.createBiquadFilter();
-  f3.type = 'peaking'; f3.frequency.value = TARGET_F3; f3.Q.value = 2.5; f3.gain.value = 3.5;
-
-  const comp = voiceAudioCtx.createDynamicsCompressor();
-  comp.threshold.value = -24; comp.knee.value = 30; comp.ratio.value = 8;
-  comp.attack.value = 0.003; comp.release.value = 0.25;
-
-  playbackAnalyser = voiceAudioCtx.createAnalyser();
-  playbackAnalyser.fftSize = 256;
-  playbackAnalyser.smoothingTimeConstant = 0.3;
-
-  source.connect(f1); f1.connect(f2); f2.connect(f3);
-  f3.connect(comp); comp.connect(playbackAnalyser);
-  playbackAnalyser.connect(voiceAudioCtx.destination);
-
-  source.start(0);
+  currentVoiceBlobUrl = URL.createObjectURL(blob);
+  const audio = new Audio();
+  audio.preload = 'auto';
+  audio.src = currentVoiceBlobUrl;
+  currentVoiceAudio = audio;
 
   if (charGroup) {
     gsap.to(charGroup.rotation, {
@@ -2780,8 +3575,16 @@ function playClientWebAudioFallback(mergedSamples) {
     });
   }
 
-  source.onended = () => {
+  const finishPlayback = () => {
+    if (currentVoiceAudio !== audio) return;
     isSpeaking = false;
+    currentVoiceAudio = null;
+    voiceVolumeCurve = null;
+    if (currentVoiceBlobUrl) {
+      URL.revokeObjectURL(currentVoiceBlobUrl);
+      currentVoiceBlobUrl = null;
+    }
+
     if (isRepeaterActive) {
       showVoiceBadge('waiting');
       updateSpeech('Скажи что-нибудь ещё, я повторю! 💖🎙️');
@@ -2799,6 +3602,27 @@ function playClientWebAudioFallback(mergedSamples) {
       body: JSON.stringify({ action: 'voice' })
     }).catch(() => {});
   };
+
+  audio.onended = finishPlayback;
+  audio.onerror = (e) => {
+    console.warn('[Voice Audio] Ошибка воспроизведения:', e);
+    finishPlayback();
+  };
+
+  try {
+    await audio.play();
+  } catch (err) {
+    console.warn('[Voice Audio] play() error:', err);
+    finishPlayback();
+  }
+}
+
+// Fallback воспроизведение при недоступности внешнего RVC сервера
+function playClientWebAudioFallback(mergedSamples) {
+  if (!mergedSamples || mergedSamples.length === 0) return;
+  const sampleRate = voiceAudioCtx ? voiceAudioCtx.sampleRate : 44100;
+  const wavBlob = bufferToWavBlob(mergedSamples, sampleRate);
+  playVoiceAudioBlob(wavBlob, false);
 }
 
 $('btn-mic')?.addEventListener('click', toggleVoiceRepeater);

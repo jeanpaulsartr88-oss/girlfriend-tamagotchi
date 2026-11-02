@@ -28,6 +28,10 @@ env/
 
 # Environment Variables & Secrets
 .env
+*.pem
+*.key
+cert.pem
+key.pem
 
 # Database
 *.db
@@ -36,18 +40,24 @@ env/
 # Operating System & IDEs
 .DS_Store
 Thumbs.db
+desktop.ini
+*.ini
 .idea/
 .vscode/
 *.swp
 *.swo
 
-# Logs
+# Logs & Temporary Audio
 *.log
+*.wav
+debug_*.wav
 
 # 3D Backups
 static/models/*_orig.glb
 
-# AI Voice Models (Weights for Colab)
+# AI Voice Models & RVC Runtimes
 voice_model/
+local_rvc/models/
+local_rvc/runtime/
 *.pth
 *.index
