@@ -1,0 +1,3948 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>Тамагочи Лёли ✨ (My Talking Tom 3D)</title>
+
+  <!-- Telegram WebApp SDK -->
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Three.js r128 & GLTFLoader -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+
+  <!-- GSAP Animation Engine -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+
+  <!-- Canvas Confetti -->
+  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.2/dist/confetti.browser.min.js"></script>
+
+  <style>
+    :root {
+      --sat: env(safe-area-inset-top, 0px);
+      --sab: env(safe-area-inset-bottom, 0px);
+    }
+    *, *::before, *::after {
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    html, body {
+      margin: 0; padding: 0;
+      width: 100%; height: 100%; height: 100dvh;
+      overflow: hidden;
+      touch-action: none;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #09090b;
+    }
+    .glass {
+      background: rgba(255, 255, 255, 0.70);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.45);
+      box-shadow: 0 8px 30px rgba(0, 0, 0, 0.08);
+    }
+    .glass-dark {
+      background: rgba(15, 23, 42, 0.70);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+    }
+
+    /* Talking Tom Circular Gauge (Компактный стиль) */
+    .gauge-circle {
+      position: relative;
+      width: 52px; height: 52px;
+      display: flex; align-items: center; justify-content: center;
+      border-radius: 9999px;
+      transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+    .dragged-food-item {
+      position: fixed;
+      pointer-events: none;
+      z-index: 9999;
+      transform: translate(-50%, -50%);
+      user-select: none;
+      touch-action: none;
+      filter: drop-shadow(0 12px 20px rgba(0, 0, 0, 0.35));
+    }
+    .gauge-svg {
+      position: absolute;
+      inset: 0;
+      width: 100%; height: 100%;
+      transform: rotate(-90deg);
+      pointer-events: none;
+    }
+    .gauge-bg {
+      fill: none;
+      stroke: rgba(0, 0, 0, 0.08);
+      stroke-width: 5;
+    }
+    .gauge-meter {
+      fill: none;
+      stroke-width: 5.5;
+      stroke-linecap: round;
+      stroke-dasharray: 163.36;
+      stroke-dashoffset: 0;
+      transition: stroke-dashoffset 0.6s ease, stroke 0.4s ease;
+    }
+
+    .room-tab.tab-active .gauge-circle {
+      transform: scale(1.15) translateY(-4px);
+      box-shadow: 0 10px 25px -5px rgba(244, 63, 94, 0.35);
+    }
+
+    /* Speech Bubble */
+    .bubble::after {
+      content: '';
+      position: absolute;
+      bottom: -8px; left: 50%;
+      transform: translateX(-50%);
+      border-width: 8px 8px 0;
+      border-style: solid;
+      border-color: rgba(255, 255, 255, 0.95) transparent;
+      display: block; width: 0;
+    }
+
+    /* Flying food & interactive drag */
+    .flying-item {
+      position: fixed;
+      pointer-events: none;
+      z-index: 100;
+      font-size: 38px;
+      transform: translate(-50%, -50%);
+      transition: transform 0.05s linear;
+    }
+
+    /* Water drops overlay */
+    .water-drop {
+      position: absolute;
+      background: linear-gradient(180deg, rgba(147, 197, 253, 0.9), rgba(59, 130, 246, 0.2));
+      border-radius: 9999px;
+      pointer-events: none;
+      z-index: 25;
+    }
+
+    /* Floating Sleep Z */
+    .sleep-z {
+      position: absolute;
+      font-weight: 900;
+      color: #c084fc;
+      pointer-events: none;
+      text-shadow: 0 2px 8px rgba(168, 85, 247, 0.4);
+      z-index: 30;
+    }
+
+    /* Active Tool Floating Cursor */
+    .active-tool-cursor {
+      position: fixed;
+      pointer-events: none;
+      z-index: 90;
+      transform: translate(-50%, -50%);
+      font-size: 42px;
+      filter: drop-shadow(0 8px 16px rgba(0,0,0,0.3));
+    }
+  </style>
+</head>
+<body class="flex flex-col select-none">
+
+<!-- ═══════════════════════════════════════════════════════════
+     1. ВЕРХНИЙ ХЕДЕР (HUD)
+════════════════════════════════════════════════════════════════ -->
+<header class="w-full max-w-md mx-auto px-3 pt-2 z-30 flex-shrink-0" style="padding-top:calc(var(--sat) + 8px)">
+  <div class="flex items-center justify-between px-1 gap-1.5">
+    <!-- Баланс монеток с кнопкой магазина -->
+    <button id="btn-open-shop" type="button" class="flex items-center gap-1 glass px-2.5 py-1.5 rounded-full shadow-sm active:scale-95 transition-transform">
+      <span class="text-sm">🪙</span>
+      <span id="hud-coins" class="text-xs font-black text-amber-700">100</span>
+      <span class="text-[10px] bg-amber-400 text-amber-950 font-black rounded-full px-1 py-0.2">+</span>
+    </button>
+
+    <!-- Кнопка «Повторялка голоса Talking Tom» -->
+    <button id="btn-mic" type="button" class="glass px-2.5 py-1.5 rounded-full text-[11px] font-black text-purple-700 border border-purple-300 active:scale-95 transition-all flex items-center gap-1 shadow-sm hover:bg-purple-50">
+      <span id="mic-icon" class="text-sm">🎙️</span>
+      <span id="mic-text">Голос</span>
+    </button>
+
+    <!-- Кнопка «Симулировать ❤️ от парня» -->
+    <button id="btn-quick-sim" type="button" class="glass px-2.5 py-1.5 rounded-full text-[11px] font-extrabold text-pink-600 border border-pink-300 active:scale-95 transition-transform flex items-center gap-1 shadow-sm hover:bg-pink-50">
+      <span class="text-sm">❤️</span>
+      <span>Парень</span>
+    </button>
+
+    <!-- Звук -->
+    <button id="btn-sound" type="button" class="w-8 h-8 rounded-full glass flex items-center justify-center text-sm active:scale-90 transition-transform shadow-sm">🔊</button>
+  </div>
+</header>
+
+<!-- ═══════════════════════════════════════════════════════════
+     2. ГЛАВНАЯ 3D-СЦЕНА (4 ИЗОЛИРОВАННЫЕ КОМНАТЫ)
+════════════════════════════════════════════════════════════════ -->
+<main class="relative flex-1 w-full max-w-md mx-auto overflow-hidden flex items-center justify-center">
+  <!-- Облачко реплик персонажа -->
+  <div class="absolute top-2 left-4 right-4 z-20 pointer-events-none flex justify-center">
+    <div id="speech" class="bubble relative max-w-[90%] bg-white/95 backdrop-blur-md border border-pink-200/90 px-4 py-2 rounded-2xl shadow-md text-xs font-bold text-gray-700 text-center leading-snug">
+      Мур! Я так рада тебя видеть! 🌸✨
+    </div>
+  </div>
+
+  <!-- Плашка статуса распознавания/повторения голоса -->
+  <div id="voice-status" class="absolute top-14 left-1/2 -translate-x-1/2 z-30 hidden items-center gap-2 px-3.5 py-1.5 rounded-full shadow-lg text-xs font-black backdrop-blur-md transition-all pointer-events-none">
+    <span id="voice-pulse" class="w-2.5 h-2.5 rounded-full"></span>
+    <span id="voice-status-text">Слушаю... 👂🎙️</span>
+  </div>
+
+  <!-- Three.js Canvas Container -->
+  <div id="canvas-wrap" class="w-full h-full relative cursor-grab active:cursor-grabbing"></div>
+
+  <!-- Полноэкранный плавный переход затемнения для сна/пробуждения -->
+  <div id="room-fade-overlay" class="pointer-events-none fixed inset-0 z-50 bg-black opacity-0"></div>
+
+  <!-- Слой частиц: вода, пузыри, сердечки, Z-z-z -->
+  <div id="particles" class="absolute inset-0 pointer-events-none overflow-hidden z-25"></div>
+
+  <!-- Плавающий инструмент (Губка / Лейка душа при перетаскивании) -->
+  <div id="active-tool-cursor" class="active-tool-cursor hidden">🧼</div>
+
+  <!-- Индикатор пены в ванной -->
+  <div id="foam-hud" class="absolute top-16 left-1/2 -translate-x-1/2 z-20 hidden items-center gap-2 bg-black/60 backdrop-blur-md px-3 py-1.5 rounded-full text-white text-[11px] font-black border border-white/20">
+    <span>🫧 Пена на теле:</span>
+    <span id="foam-count-txt" class="text-cyan-300 font-bold">0</span>
+  </div>
+
+  <!-- Подсказка кликабельности лампы в спальне -->
+  <div id="lamp-hint" class="absolute top-16 right-6 z-20 hidden pointer-events-none bg-black/60 text-white text-[10px] font-bold px-2.5 py-1 rounded-full animate-bounce">
+    💡 Тапни на лампу!
+  </div>
+</main>
+
+<!-- ═══════════════════════════════════════════════════════════
+     3. ИНТЕРАКТИВНЫЕ ПОДМЕНЮ КОМНАТ
+════════════════════════════════════════════════════════════════ -->
+<div class="w-full max-w-md mx-auto px-3 pb-2 z-30 flex-shrink-0">
+
+  <!-- A. ГОСТИНАЯ: Поглаживание, Щекотка, Аркада -->
+  <div id="shelf-living" class="room-shelf glass rounded-2xl p-2.5 shadow-md space-y-2">
+    <div class="flex items-center justify-between px-1">
+      <span class="text-[11px] font-black uppercase tracking-wider text-pink-600 flex items-center gap-1">
+        <span>🛋️</span> Гостиная
+      </span>
+      <span class="text-[10px] text-gray-500 font-medium">Гладь щёчки и веселись!</span>
+    </div>
+    <div class="grid grid-cols-2 gap-2">
+      <button id="btn-tickle" type="button" class="flex items-center justify-center gap-1.5 py-3 px-3 rounded-xl bg-white/95 border border-pink-200 text-pink-700 font-black text-xs active:scale-95 transition-all shadow-xs">
+        <span class="text-lg">🥰</span>
+        <span>Пощекотать</span>
+      </button>
+      <button id="btn-start-arcade" type="button" class="flex items-center justify-center gap-1.5 py-3 px-3 rounded-xl bg-gradient-to-r from-pink-500 to-rose-500 text-white font-black text-xs shadow-md active:scale-95 transition-all">
+        <span class="text-lg">🎁</span>
+        <span>«Ловец Счастья»</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- B. КУХНЯ: Выдвижная тарелка с едой для кормления -->
+  <div id="shelf-kitchen" class="room-shelf hidden glass rounded-2xl p-2.5 shadow-md space-y-2">
+    <div class="flex items-center justify-between px-1">
+      <span class="text-[11px] font-black uppercase tracking-wider text-orange-600 flex items-center gap-1">
+        <span>🍕</span> Обеденный стол
+      </span>
+      <span class="text-[10px] text-gray-500 font-medium">Перетащи еду прямо в рот!</span>
+    </div>
+    <div class="grid grid-cols-5 gap-1.5" id="food-plate">
+      <button type="button" class="btn-food flex flex-col items-center p-1.5 rounded-xl bg-white/95 border border-orange-200 active:scale-95 transition-all shadow-xs" data-food="pizza" data-gain="25" data-emoji="🍕">
+        <span class="text-2xl">🍕</span>
+        <span class="text-[9px] font-extrabold text-orange-600">+25%</span>
+      </button>
+      <button type="button" class="btn-food flex flex-col items-center p-1.5 rounded-xl bg-white/95 border border-orange-200 active:scale-95 transition-all shadow-xs" data-food="croissant" data-gain="20" data-emoji="🥐">
+        <span class="text-2xl">🥐</span>
+        <span class="text-[9px] font-extrabold text-amber-600">+20%</span>
+      </button>
+      <button type="button" class="btn-food flex flex-col items-center p-1.5 rounded-xl bg-white/95 border border-orange-200 active:scale-95 transition-all shadow-xs" data-food="cake" data-gain="30" data-emoji="🍰">
+        <span class="text-2xl">🍰</span>
+        <span class="text-[9px] font-extrabold text-pink-600">+30%</span>
+      </button>
+      <button type="button" class="btn-food flex flex-col items-center p-1.5 rounded-xl bg-white/95 border border-orange-200 active:scale-95 transition-all shadow-xs" data-food="coffee" data-gain="10" data-emoji="☕">
+        <span class="text-2xl">☕</span>
+        <span class="text-[9px] font-extrabold text-amber-700">+⚡10%</span>
+      </button>
+      <button type="button" class="btn-food flex flex-col items-center p-1.5 rounded-xl bg-white/95 border border-orange-200 active:scale-95 transition-all shadow-xs" data-food="watermelon" data-gain="15" data-emoji="🍉">
+        <span class="text-2xl">🍉</span>
+        <span class="text-[9px] font-extrabold text-emerald-600">+15%</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- C. ВАННАЯ: Интерактивная Губка и Лейка Душа -->
+  <div id="shelf-bathroom" class="room-shelf hidden glass rounded-2xl p-2.5 shadow-md space-y-2">
+    <div class="flex items-center justify-between px-1">
+      <span class="text-[11px] font-black uppercase tracking-wider text-cyan-600 flex items-center gap-1">
+        <span>🧼</span> Ванная комната
+      </span>
+      <span class="text-[10px] text-gray-500 font-medium">Намыль губкой и смой душем!</span>
+    </div>
+    <div class="grid grid-cols-2 gap-2">
+      <!-- Инструмент Губка -->
+      <button id="tool-sponge" type="button" class="flex items-center justify-center gap-2 py-3 px-3 rounded-xl bg-white/95 border-2 border-cyan-400 text-cyan-800 font-black text-xs active:scale-95 transition-all shadow-xs">
+        <span class="text-xl">🧽</span>
+        <span id="sponge-btn-txt">Губка (Намылить)</span>
+      </button>
+      <!-- Инструмент Душ -->
+      <button id="tool-shower" type="button" class="flex items-center justify-center gap-2 py-3 px-3 rounded-xl bg-gradient-to-r from-cyan-400 to-blue-500 text-white font-black text-xs shadow-md active:scale-95 transition-all">
+        <span class="text-xl">🚿</span>
+        <span id="shower-btn-txt">Лейка Душа (Смыть)</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- D. СПАЛЬНЯ: Торшер и Укладывание спать -->
+  <div id="shelf-bedroom" class="room-shelf hidden glass rounded-2xl p-2.5 shadow-md space-y-2">
+    <div class="flex items-center justify-between px-1">
+      <span class="text-[11px] font-black uppercase tracking-wider text-purple-600 flex items-center gap-1">
+        <span>🛏</span> Спальня
+      </span>
+      <span class="text-[10px] text-purple-500 font-bold">+1.5% энергии/мин во сне</span>
+    </div>
+    <button id="btn-lamp" type="button" class="w-full py-3.5 px-4 rounded-xl bg-gradient-to-r from-purple-500 via-indigo-500 to-purple-600 text-white font-black text-xs shadow-md active:scale-95 transition-all flex items-center justify-center gap-2">
+      <span id="lamp-icon" class="text-lg">🌙</span>
+      <span id="lamp-label">ВЫКЛЮЧИТЬ СВЕТ (Уложить спать)</span>
+    </button>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════
+     4. НИЖНЯЯ ПАНЕЛЬ С КРУГЛЫМИ ИНДИКАТОРАМИ (TALKING TOM STYLE)
+════════════════════════════════════════════════════════════════ -->
+<nav class="w-full max-w-md mx-auto px-4 pb-2 z-30 flex-shrink-0" style="padding-bottom:calc(var(--sab) + 6px)">
+  <div class="glass rounded-3xl p-2 shadow-xl flex justify-around items-center border border-white/80">
+
+    <!-- 1. ГОСТИНАЯ (ВЕСЕЛЬЕ / ИГРЫ) -->
+    <button type="button" class="room-tab tab-active flex flex-col items-center" data-room="living">
+      <div class="gauge-circle" id="circle-fun">
+        <svg class="gauge-svg" viewBox="0 0 64 64">
+          <circle class="gauge-bg" cx="32" cy="32" r="26"/>
+          <circle id="meter-fun" class="gauge-meter" cx="32" cy="32" r="26" stroke="#22c55e"/>
+        </svg>
+        <span class="text-2xl">🎮</span>
+      </div>
+      <span id="txt-fun" class="text-[10px] font-black text-gray-700 mt-1">85%</span>
+    </button>
+
+    <!-- 2. КУХНЯ (ГОЛОД / ЕДА) -->
+    <button type="button" class="room-tab flex flex-col items-center" data-room="kitchen">
+      <div class="gauge-circle" id="circle-hunger">
+        <svg class="gauge-svg" viewBox="0 0 64 64">
+          <circle class="gauge-bg" cx="32" cy="32" r="26"/>
+          <circle id="meter-hunger" class="gauge-meter" cx="32" cy="32" r="26" stroke="#22c55e"/>
+        </svg>
+        <span class="text-2xl">🍴</span>
+      </div>
+      <span id="txt-hunger" class="text-[10px] font-black text-gray-700 mt-1">80%</span>
+    </button>
+
+    <!-- 3. ВАННАЯ (ГИГИЕНА / ДУШ) -->
+    <button type="button" class="room-tab flex flex-col items-center" data-room="bathroom">
+      <div class="gauge-circle" id="circle-hygiene">
+        <svg class="gauge-svg" viewBox="0 0 64 64">
+          <circle class="gauge-bg" cx="32" cy="32" r="26"/>
+          <circle id="meter-hygiene" class="gauge-meter" cx="32" cy="32" r="26" stroke="#22c55e"/>
+        </svg>
+        <span class="text-2xl">🧼</span>
+      </div>
+      <span id="txt-hygiene" class="text-[10px] font-black text-gray-700 mt-1">90%</span>
+    </button>
+
+    <!-- 4. СПАЛЬНЯ (ЭНЕРГИЯ / СОН) -->
+    <button type="button" class="room-tab flex flex-col items-center" data-room="bedroom">
+      <div class="gauge-circle" id="circle-energy">
+        <svg class="gauge-svg" viewBox="0 0 64 64">
+          <circle class="gauge-bg" cx="32" cy="32" r="26"/>
+          <circle id="meter-energy" class="gauge-meter" cx="32" cy="32" r="26" stroke="#22c55e"/>
+        </svg>
+        <span class="text-2xl">🌙</span>
+      </div>
+      <span id="txt-energy" class="text-[10px] font-black text-gray-700 mt-1">80%</span>
+    </button>
+
+  </div>
+</nav>
+
+<!-- ═══════════════════════════════════════════════════════════
+     5. ВСТРОЕННАЯ АРКАДНАЯ МИНИ-ИГРА «ЛОВЕЦ СЧАСТЬЯ»
+════════════════════════════════════════════════════════════════ -->
+<div id="arcade-modal" class="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-md hidden flex-col justify-between p-3">
+  <!-- Верхняя строка аркады -->
+  <div class="flex items-center justify-between glass px-4 py-2 rounded-2xl shadow-lg">
+    <div class="flex items-center gap-1.5">
+      <span class="text-xs font-black text-pink-700">ОЧКИ:</span>
+      <span id="arcade-score" class="text-base font-black text-rose-600">0</span>
+    </div>
+    <div class="flex items-center gap-1" id="arcade-lives">
+      <span class="text-lg">❤️</span>
+      <span class="text-lg">❤️</span>
+      <span class="text-lg">❤️</span>
+    </div>
+    <div class="flex items-center gap-2">
+      <div class="flex items-center gap-1 text-xs font-black text-amber-600">
+        <span>🪙</span>
+        <span id="arcade-coins-earned">0</span>
+      </div>
+      <button id="btn-close-arcade" type="button" class="bg-rose-500 text-white text-[10px] font-black px-2.5 py-1 rounded-xl shadow-xs active:scale-95">Выход</button>
+    </div>
+  </div>
+
+  <!-- Холст игры HTML5 Canvas -->
+  <div class="relative flex-1 w-full my-2 overflow-hidden rounded-2xl border-2 border-white/20 shadow-inner bg-gradient-to-b from-pink-900/40 via-purple-900/30 to-indigo-950/60">
+    <canvas id="arcade-canvas" class="w-full h-full block"></canvas>
+    <div id="arcade-intro" class="absolute inset-0 flex flex-col items-center justify-center bg-black/50 p-4 text-center">
+      <span class="text-5xl mb-2 animate-bounce">🧺</span>
+      <h3 class="text-lg font-black text-white mb-1">«Ловец Счастья»</h3>
+      <p class="text-xs text-pink-200 max-w-xs mb-4">Лови вкусняшки, букеты и сердечки! Уворачивайся от будильников ⏰ и разбитых сердец 💔</p>
+      <button id="btn-start-game-now" class="bg-gradient-to-r from-pink-500 to-rose-500 text-white font-black text-sm px-6 py-2.5 rounded-2xl shadow-lg active:scale-95 animate-pulse">ИГРАТЬ!</button>
+    </div>
+  </div>
+
+  <div class="text-center text-[11px] text-white/80 font-bold py-0.5">
+    Води пальцем влево-вправо, чтобы двигать корзинку! 👇
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════
+     6. МАГАЗИН УЮТА (СМЕНА СТИЛЕЙ)
+════════════════════════════════════════════════════════════════ -->
+<div id="shop-modal" class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm hidden items-center justify-center p-4">
+  <div class="bg-white rounded-3xl p-5 max-w-sm w-full shadow-2xl space-y-3.5 border-2 border-pink-200">
+    <div class="flex items-center justify-between border-b border-pink-100 pb-2">
+      <div class="flex items-center gap-1.5">
+        <span class="text-xl">🎨</span>
+        <h3 class="text-sm font-black text-pink-800">Магазин Уюта Лёли</h3>
+      </div>
+      <button id="btn-close-shop" class="text-gray-400 hover:text-gray-600 font-bold text-lg">&times;</button>
+    </div>
+    <p class="text-[11px] text-gray-500 font-medium">Выбирай палитру обоев для гостиной за монетки любви!</p>
+    <div class="grid grid-cols-2 gap-2">
+      <button class="btn-theme-apply p-2.5 rounded-xl border border-pink-200 bg-pink-50 text-left active:scale-95 transition-all" data-theme="pink" data-cost="0">
+        <div class="w-full h-8 rounded-lg bg-pink-200 mb-1.5"></div>
+        <div class="text-xs font-black text-pink-900">Розовая мечта</div>
+        <div class="text-[10px] text-pink-600 font-bold">Бесплатно</div>
+      </button>
+      <button class="btn-theme-apply p-2.5 rounded-xl border border-emerald-200 bg-emerald-50 text-left active:scale-95 transition-all" data-theme="mint" data-cost="20">
+        <div class="w-full h-8 rounded-lg bg-emerald-200 mb-1.5"></div>
+        <div class="text-xs font-black text-emerald-900">Мятная свежесть</div>
+        <div class="text-[10px] text-emerald-600 font-bold">20 🪙</div>
+      </button>
+      <button class="btn-theme-apply p-2.5 rounded-xl border border-purple-200 bg-purple-50 text-left active:scale-95 transition-all" data-theme="lavender" data-cost="35">
+        <div class="w-full h-8 rounded-lg bg-purple-200 mb-1.5"></div>
+        <div class="text-xs font-black text-purple-900">Лавандовый сон</div>
+        <div class="text-[10px] text-purple-600 font-bold">35 🪙</div>
+      </button>
+      <button class="btn-theme-apply p-2.5 rounded-xl border border-amber-200 bg-amber-50 text-left active:scale-95 transition-all" data-theme="gold" data-cost="50">
+        <div class="w-full h-8 rounded-lg bg-amber-200 mb-1.5"></div>
+        <div class="text-xs font-black text-amber-900">Золотое тепло</div>
+        <div class="text-[10px] text-amber-600 font-bold">50 🪙</div>
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════
+     7. ПОДАРОК ОТ ПАРНЯ (МОДАЛЬНОЕ ОКНО)
+════════════════════════════════════════════════════════════════ -->
+<div id="gift-modal" class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm hidden items-center justify-center p-4">
+  <div class="bg-white rounded-3xl p-6 max-w-xs w-full text-center shadow-2xl border-2 border-pink-300 space-y-3 animate-bounce">
+    <span class="text-5xl block">💖</span>
+    <h3 class="text-base font-black text-pink-700">Подарок от любимого!</h3>
+    <p id="gift-text" class="text-xs text-gray-600 font-medium leading-relaxed"></p>
+    <button id="gift-close" type="button" class="w-full py-2.5 bg-gradient-to-r from-pink-500 to-rose-500 text-white font-black text-xs rounded-xl shadow-md active:scale-95">
+      Спасибо, любимый! 🥰
+    </button>
+  </div>
+</div>
+
+<!-- Экран первоначальной загрузки 3D -->
+<div id="loading" class="fixed inset-0 z-50 bg-gradient-to-b from-pink-100 via-purple-50 to-pink-200 flex flex-col items-center justify-center p-6 text-center transition-opacity duration-500">
+  <div class="relative w-20 h-20 mb-4 flex items-center justify-center">
+    <div class="absolute inset-0 rounded-full border-4 border-pink-300 border-t-pink-600 animate-spin"></div>
+    <span class="text-3xl animate-pulse">🌸</span>
+  </div>
+  <h2 class="text-base font-black text-pink-800 mb-1">Загружаем мир Лёли...</h2>
+  <p id="load-text" class="text-xs text-pink-600 font-bold mb-3">Готовим уютные комнаты</p>
+  <div class="w-48 bg-white/70 rounded-full h-2 overflow-hidden shadow-inner border border-pink-200">
+    <div id="load-bar" class="bg-gradient-to-r from-pink-500 to-rose-500 h-full w-0 transition-all duration-300"></div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════
+     8. JAVASCRIPT: THREE.JS, 4 ИЗОЛИРОВАННЫЕ КОМНАТЫ, МЫТЬЕ
+════════════════════════════════════════════════════════════════ -->
+<script>
+// ─── Вспомогательные функции ──────────────────────────────────────────────────
+const $ = (id) => document.getElementById(id);
+
+// Telegram WebApp инициализация
+if (window.Telegram && window.Telegram.WebApp) {
+  try {
+    window.Telegram.WebApp.ready();
+    window.Telegram.WebApp.expand();
+    if (typeof window.Telegram.WebApp.enableClosingConfirmation === 'function') {
+      window.Telegram.WebApp.enableClosingConfirmation();
+    }
+  } catch (e) {
+    console.warn('[Telegram WebApp] Init warning:', e);
+  }
+}
+const tg = window.Telegram?.WebApp;
+
+function safeHaptic(style = 'light') {
+  try {
+    if (tg?.HapticFeedback) {
+      if (style === 'light' || style === 'medium' || style === 'heavy') {
+        tg.HapticFeedback.impactOccurred(style);
+      } else if (style === 'success' || style === 'warning' || style === 'error') {
+        tg.HapticFeedback.notificationOccurred(style);
+      }
+    }
+  } catch(_) {}
+}
+
+// ─── ЗВУКОВОЙ ДВИЖОК И БАНК ОРИГИНАЛЬНЫХ ФРАЗ (/static/voice/) ────────────────
+let isSoundOn = true;
+const VOICE_BANK = {
+  giggle: 'static/voice/giggle.wav',
+  yawn:   'static/voice/yawn.wav',
+  eat:    'static/voice/eat.wav',
+  sigh:   'static/voice/sigh.wav',
+  kiss:   'static/voice/kiss.wav'
+};
+
+function playVoiceClip(name) {
+  if (!isSoundOn) return;
+  const path = VOICE_BANK[name];
+  if (!path) return;
+  try {
+    const snd = new Audio(path);
+    snd.volume = 0.85;
+    snd.play().catch(() => {});
+  } catch(_) {}
+}
+
+function playSfx(type) {
+  if (!isSoundOn) return;
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+
+    const now = ctx.currentTime;
+    if (type === 'tap') {
+      osc.frequency.setValueAtTime(420, now);
+      osc.frequency.exponentialRampToValueAtTime(840, now + 0.08);
+      gain.gain.setValueAtTime(0.25, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
+      osc.start(now); osc.stop(now + 0.08);
+    } else if (type === 'eat') {
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(320, now);
+      osc.frequency.exponentialRampToValueAtTime(160, now + 0.12);
+      gain.gain.setValueAtTime(0.3, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
+      osc.start(now); osc.stop(now + 0.12);
+    } else if (type === 'soap') {
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(700 + Math.random() * 300, now);
+      gain.gain.setValueAtTime(0.12, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.06);
+      osc.start(now); osc.stop(now + 0.06);
+    } else if (type === 'shower') {
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(350, now);
+      osc.frequency.linearRampToValueAtTime(500, now + 0.25);
+      gain.gain.setValueAtTime(0.2, now);
+      gain.gain.linearRampToValueAtTime(0.001, now + 0.25);
+      osc.start(now); osc.stop(now + 0.25);
+    } else if (type === 'switch') {
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(550, now);
+      osc.frequency.setValueAtTime(350, now + 0.04);
+      gain.gain.setValueAtTime(0.25, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
+      osc.start(now); osc.stop(now + 0.08);
+    } else if (type === 'fanfare') {
+      [523.25, 659.25, 783.99, 1046.50].forEach((freq, i) => {
+        const o = ctx.createOscillator();
+        const g = ctx.createGain();
+        o.connect(g); g.connect(ctx.destination);
+        o.frequency.value = freq;
+        g.gain.setValueAtTime(0.18, now + i * 0.09);
+        g.gain.exponentialRampToValueAtTime(0.001, now + i * 0.09 + 0.25);
+        o.start(now + i * 0.09); o.stop(now + i * 0.09 + 0.25);
+      });
+    }
+  } catch(_) {}
+}
+
+$('btn-sound')?.addEventListener('click', () => {
+  isSoundOn = !isSoundOn;
+  $('btn-sound').innerText = isSoundOn ? '🔊' : '🔇';
+  safeHaptic('light');
+});
+
+// ─── СОСТОЯНИЕ ТАМАГОЧИ ──────────────────────────────────────────────────────
+const petState = {
+  hunger: 80,
+  energy: 80,
+  hygiene: 90,
+  fun: 85,
+  coins: 100,
+  isSleeping: false,
+  lastUpdate: Date.now()
+};
+
+function loadState() {
+  try {
+    const raw = localStorage.getItem('tamagotchi_lelya_tom_v2');
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      Object.assign(petState, parsed);
+    }
+  } catch(_) {}
+  applyDegradation();
+  updateHUD();
+}
+
+function saveState() {
+  petState.lastUpdate = Date.now();
+  try {
+    localStorage.setItem('tamagotchi_lelya_tom_v2', JSON.stringify(petState));
+  } catch(_) {}
+  updateHUD();
+}
+
+function applyDegradation() {
+  const now = Date.now();
+  const elapsedMinutes = Math.min(1440, (now - (petState.lastUpdate || now)) / 60000);
+  if (elapsedMinutes > 0.5) {
+    if (petState.isSleeping) {
+      petState.energy = Math.min(100, petState.energy + elapsedMinutes * 1.5);
+      petState.hunger = Math.max(0, petState.hunger - elapsedMinutes * 0.2);
+    } else {
+      petState.hunger  = Math.max(0, petState.hunger  - elapsedMinutes * 0.45);
+      petState.energy  = Math.max(0, petState.energy  - elapsedMinutes * 0.35);
+      petState.hygiene = Math.max(0, petState.hygiene - elapsedMinutes * 0.25);
+      petState.fun     = Math.max(0, petState.fun     - elapsedMinutes * 0.40);
+    }
+  }
+}
+setInterval(applyDegradation, 20000);
+
+// ─── ОБНОВЛЕНИЕ HUD И КРУГОВЫХ ШКАЛ ──────────────────────────────────────────
+const GAUGE_CIRCUMFERENCE = 163.36; // 2 * PI * 26
+
+function updateGauge(meterId, textId, value) {
+  const meter = $(meterId);
+  const text  = $(textId);
+  if (!meter || !text) return;
+
+  const val = Math.max(0, Math.min(100, Math.round(value)));
+  text.innerText = `${val}%`;
+
+  const offset = GAUGE_CIRCUMFERENCE - (val / 100) * GAUGE_CIRCUMFERENCE;
+  meter.style.strokeDashoffset = offset;
+
+  // Динамическая смена цвета в стиле Talking Tom: Зеленый (>70%) -> Оранжевый (30-70%) -> Красный (<30%)
+  if (val >= 70) {
+    meter.style.stroke = '#22c55e'; // Green
+  } else if (val >= 30) {
+    meter.style.stroke = '#f59e0b'; // Amber
+  } else {
+    meter.style.stroke = '#ef4444'; // Red
+  }
+}
+
+function updateHUD() {
+  updateGauge('meter-hunger',  'txt-hunger',  petState.hunger);
+  updateGauge('meter-hygiene', 'txt-hygiene', petState.hygiene);
+  updateGauge('meter-energy',  'txt-energy',  petState.energy);
+  updateGauge('meter-fun',     'txt-fun',     petState.fun);
+
+  if ($('hud-coins')) $('hud-coins').innerText = petState.coins;
+}
+
+function updateSpeech(customText = null) {
+  const el = $('speech');
+  if (!el) return;
+  if (customText) {
+    el.innerText = customText;
+    return;
+  }
+  if (petState.isSleeping) {
+    el.innerText = 'Тссс... Лёля сладко спит 💤🌙';
+  } else if (petState.hunger < 30) {
+    el.innerText = 'Я так проголодалась! Давай покушаем на кухне? 🍕';
+  } else if (petState.hygiene < 30) {
+    el.innerText = 'Пора освежиться в ванной с душистой пенкой! 🧼🚿';
+  } else if (petState.fun < 30) {
+    el.innerText = 'Мне скучновато... Давай поиграем или поговорим? 🎮🎙️';
+  } else if (petState.energy < 30) {
+    el.innerText = 'Глазки слипаются... Пора в спальню баиньки 🛏️💤';
+  } else {
+    const quotes = {
+      living:   'В гостиной так светло и уютно! Поговори со мной 🎙️💖',
+      kitchen:  'Ммм, на кухне пахнет вкусняшками! Угостишь? 🍕😋',
+      bathroom: 'Обожаю купаться! Намыль меня губкой 🧽✨',
+      bedroom:  'В спальне тихо и тепло... Всегда думаю о тебе 🌸'
+    };
+    el.innerText = quotes[currentRoom] || 'Мур! Я так рада тебя видеть! 🌸';
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 4 ИЗОЛИРОВАННЫЕ 3D-СЦЕНЫ В ПРОСТРАНСТВЕ (THREE.JS)
+// ═══════════════════════════════════════════════════════════════
+const wrap = $('canvas-wrap');
+let scene, camera, renderer, clock;
+let charGroup = null;
+let contactShadowMesh = null;
+const baseY = 0;
+const baseScale = 1.05;
+
+// Кости Mixamo и ссылки на морфы
+const bones = {
+  head: null, neck: null, spine: null, chest: null, hips: null,
+  leftShoulder: null, rightShoulder: null,
+  leftArm: null, rightArm: null,
+  leftForeArm: null, rightForeArm: null,
+  leftHand: null, rightHand: null,
+  leftUpLeg: null, rightUpLeg: null,
+  leftLeg: null, rightLeg: null,
+  jaw: null
+};
+window.bones = bones;
+
+let characterMesh = null;
+let characterLegs = null;
+let currentArmPoseMode = 'standing';
+let armLiftAmount = 0;
+let nextBlinkTimer = null;
+let morphMouthIndex = -1;
+let morphEyeBlinkIndex = -1;
+let mixer = null;
+const initialBoneRots = {};
+let smoothedVolume = 0;
+let isBlinking = false;
+let pointer = { x: 0, y: 0 };
+let targetPointer = { x: 0, y: 0 };
+const cameraLookTarget = new THREE.Vector3(0, 0.62, 0);
+
+// 4 комнаты: индивидуальная настройка камеры и положения персонажа (Talking Tom style)
+const ROOM_CONFIGS = {
+  living: {
+    name: 'Гостиная',
+    xOffset: 0,
+    camPos: { x: 0, y: 0.96, z: 2.80 },
+    lookAt: { x: 0, y: 0.62, z: 0 },
+    charPos: { x: 0, y: 0.04, z: 0 }
+  },
+  kitchen: {
+    name: 'Кухня',
+    xOffset: 14,
+    camPos: { x: 14.0, y: 1.15, z: 1.85 },
+    lookAt: { x: 14.0, y: 0.82, z: 0.28 },
+    charPos: { x: 14.0, y: -0.06, z: 0.18 }
+  },
+  bathroom: {
+    name: 'Ванная',
+    xOffset: 28,
+    camPos: { x: 28.0, y: 1.05, z: 2.30 },
+    lookAt: { x: 28.0, y: 0.70, z: 0 },
+    charPos: { x: 28.0, y: 0.08, z: 0 }
+  },
+  bedroom: {
+    name: 'Спальня',
+    xOffset: 42,
+    camPos: { x: 42.0, y: 0.96, z: 2.80 },
+    lookAt: { x: 42.0, y: 0.62, z: 0.60 },
+    charPos: { x: 42.0, y: 0.04, z: 0.60 }
+  }
+};
+
+let currentRoom = 'living';
+
+// Источники света по комнатам
+let ambientLight = null, mainDirLight = null;
+let livingSunLight, livingRimLight;
+let kitchenSconceLight;
+let bathroomDiffusedLight;
+let bedroomSunLight, bedroomRimLight, bedroomLampLight, bedroomMoonLight, bedroomShadeMesh;
+let bedroomWindowSkyMesh;
+
+// ─── 3D МЫТЬЕ В ВАННОЙ: ПЕНА И ДУШ ───────────────────────────────────────────
+const foamBubbles = [];
+let activeBathroomTool = null; // 'sponge' | 'shower' | null
+let waterParticlesMesh = null;
+let waterDropsData = [];
+
+// Полупрозрачный PBR материал пены (белые пузырьки, opacity: 0.85, roughness: 0.1)
+const foamMaterial = new THREE.MeshStandardMaterial({
+  color: 0xffffff,
+  roughness: 0.1,
+  metalness: 0.05,
+  transparent: true,
+  opacity: 0.85
+});
+
+// Создание мягкой контактной тени под персонажем
+function createContactShadow() {
+  const canvas = document.createElement('canvas');
+  canvas.width = 128; canvas.height = 128;
+  const ctx = canvas.getContext('2d');
+  const grad = ctx.createRadialGradient(64, 64, 4, 64, 64, 60);
+  grad.addColorStop(0, 'rgba(0, 0, 0, 0.45)');
+  grad.addColorStop(0.5, 'rgba(0, 0, 0, 0.20)');
+  grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, 128, 128);
+
+  const tex = new THREE.CanvasTexture(canvas);
+  const geo = new THREE.PlaneGeometry(0.75, 0.75);
+  const mat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false });
+  const shadow = new THREE.Mesh(geo, mat);
+  shadow.rotation.x = -Math.PI / 2;
+  shadow.position.set(0, 0.003, 0);
+  return shadow;
+}
+
+function initThreeScene() {
+  const W = wrap.clientWidth || window.innerWidth;
+  const H = wrap.clientHeight || window.innerHeight * 0.6;
+
+  scene = new THREE.Scene();
+  scene.background = new THREE.Color(0xdad2c7); // Убираем ослепляющий белый фон сцены
+  clock = new THREE.Clock();
+
+  // Камера: крупный выразительный план (65-75% экрана в стиле Talking Tom)
+  camera = new THREE.PerspectiveCamera(38, W / H, 0.1, 100);
+  camera.position.set(ROOM_CONFIGS.living.camPos.x, ROOM_CONFIGS.living.camPos.y, ROOM_CONFIGS.living.camPos.z);
+  cameraLookTarget.set(ROOM_CONFIGS.living.lookAt.x, ROOM_CONFIGS.living.lookAt.y, ROOM_CONFIGS.living.lookAt.z);
+
+  window.camera = camera;
+  window.cameraLookTarget = cameraLookTarget;
+  window.ROOM_CONFIGS = ROOM_CONFIGS;
+
+  renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: 'high-performance' });
+  renderer.setSize(W, H);
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+
+  // Тономаппинг и цветовое пространство
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.0;
+
+  // Мягкие реалистичные тени без артефактов
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  wrap.appendChild(renderer.domElement);
+
+  // Основной свет - теплый рассеянный заполняющий свет (0.65)
+  ambientLight = new THREE.AmbientLight(0xfff1e6, 0.65);
+  scene.add(ambientLight);
+
+  // Направленный свет (0.55, позиция 2, 6, 4)
+  mainDirLight = new THREE.DirectionalLight(0xffffff, 0.55);
+  mainDirLight.position.set(2, 6, 4);
+  mainDirLight.target.position.set(0, 1.0, 0);
+  mainDirLight.castShadow = false;
+  scene.add(mainDirLight);
+  scene.add(mainDirLight.target);
+
+  // Мягкая контактная тень под ногами персонажа
+  contactShadowMesh = createContactShadow();
+  scene.add(contactShadowMesh);
+
+  // 2. Строим 4 изолированные комнаты вдоль оси X
+  buildLivingRoom(ROOM_CONFIGS.living.xOffset);
+  buildKitchenRoom(ROOM_CONFIGS.kitchen.xOffset);
+  buildBathroomRoom(ROOM_CONFIGS.bathroom.xOffset);
+  buildBedroomRoom(ROOM_CONFIGS.bedroom.xOffset);
+
+  // 3. Загружаем персонажа с полным сбросом emissive
+  loadCharacterModel();
+
+  // 4. Подключаем слушатели
+  setupInteractions();
+  window.addEventListener('resize', onResize);
+  requestAnimationFrame(animate);
+}
+
+// ─── 1. ГОСТИНАЯ (X = 0): УЮТНАЯ КОМНАТА С ТВ, ТУМБОЙ, РАСТЕНИЕМ И ПОЛКАМИ ───
+let livingBackWallMesh;
+function buildLivingRoom(ox) {
+  const group = new THREE.Group();
+  group.position.x = ox;
+
+  // 1. Пол: древесный матовый оттенок (#8c6f56, roughness: 0.9)
+  const floorGeo = new THREE.PlaneGeometry(5.2, 4.4);
+  const floorMat = createWoodFloorMaterial('#8c6f56', '#72553e');
+  const floor = new THREE.Mesh(floorGeo, floorMat);
+  floor.rotation.x = -Math.PI / 2;
+  floor.position.y = baseY;
+  floor.receiveShadow = true;
+  group.add(floor);
+
+  // 2. Стены: теплый латте (#d4c5b3, roughness: 0.9)
+  const wallMat = createWallPaperMaterial('#d4c5b3', '#c7b7a4');
+  livingBackWallMesh = new THREE.Mesh(new THREE.PlaneGeometry(5.2, 3.6), wallMat);
+  livingBackWallMesh.position.set(0, baseY + 1.8, -2.1);
+  livingBackWallMesh.receiveShadow = true;
+  group.add(livingBackWallMesh);
+
+  // Плинтус
+  const baseboardMat = new THREE.MeshStandardMaterial({ color: 0x72553e, roughness: 0.9, metalness: 0.0 });
+  const bb = new THREE.Mesh(new THREE.BoxGeometry(5.2, 0.12, 0.05), baseboardMat);
+  bb.position.set(0, baseY + 0.06, -2.08);
+  bb.receiveShadow = true;
+  group.add(bb);
+
+  // 3. Уютный круглый ковер в центре комнаты (матовый #b8a692, roughness: 0.9)
+  const rugGeo = new THREE.CircleGeometry(1.35, 36);
+  const rugMat = new THREE.MeshStandardMaterial({ color: 0xb8a692, roughness: 0.90, metalness: 0.0 });
+  const rug = new THREE.Mesh(rugGeo, rugMat);
+  rug.rotation.x = -Math.PI / 2;
+  rug.position.set(0, baseY + 0.005, 0);
+  rug.receiveShadow = true;
+  group.add(rug);
+
+  // 4. НИЗКАЯ ТУМБА ПОД ТВ ИЗ ДЕРЕВА
+  const credenzaGroup = new THREE.Group();
+  credenzaGroup.position.set(1.10, 0, -1.82);
+
+  const credenzaWoodMat = new THREE.MeshStandardMaterial({ color: 0xb59d84, roughness: 0.85, metalness: 0.0 });
+  const darkMetalMat = new THREE.MeshStandardMaterial({ color: 0x1f2937, metalness: 0.8, roughness: 0.2 });
+
+  // Корпус тумбы (длина 1.45м, глубина 0.42м, высота 0.38м)
+  const credenzaBody = new THREE.Mesh(new THREE.BoxGeometry(1.45, 0.38, 0.42), credenzaWoodMat);
+  credenzaBody.position.y = 0.27;
+  credenzaBody.castShadow = credenzaBody.receiveShadow = true;
+  credenzaGroup.add(credenzaBody);
+
+  // Ножки тумбы из черного металла
+  [[-0.65, -0.16], [0.65, -0.16], [-0.65, 0.16], [0.65, 0.16]].forEach(([lx, lz]) => {
+    const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.012, 0.08, 12), darkMetalMat);
+    leg.position.set(lx, 0.04, lz);
+    leg.castShadow = true;
+    credenzaGroup.add(leg);
+  });
+
+  // Латунные ручки ящиков
+  const brassHandleMat = new THREE.MeshStandardMaterial({ color: 0xd4af37, metalness: 0.9, roughness: 0.15 });
+  [-0.35, 0.35].forEach(hx => {
+    const h = new THREE.Mesh(new THREE.BoxGeometry(0.10, 0.015, 0.02), brassHandleMat);
+    h.position.set(hx, 0.27, 0.22);
+    h.castShadow = true;
+    credenzaGroup.add(h);
+  });
+
+  // 5. ПЛОСКИЙ ТЕЛЕВИЗОР НА ТУМБЕ
+  // Подставка ТВ
+  const tvBase = new THREE.Mesh(new THREE.BoxGeometry(0.38, 0.015, 0.22), darkMetalMat);
+  tvBase.position.y = 0.467;
+  tvBase.castShadow = tvBase.receiveShadow = true;
+  credenzaGroup.add(tvBase);
+
+  const tvPole = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.08), darkMetalMat);
+  tvPole.position.y = 0.51;
+  tvPole.castShadow = true;
+  credenzaGroup.add(tvPole);
+
+  // Тонкая черная рамка телевизора (BoxGeometry, dark metal)
+  const tvFrame = new THREE.Mesh(new THREE.BoxGeometry(1.22, 0.72, 0.03), darkMetalMat);
+  tvFrame.position.y = 0.88;
+  tvFrame.castShadow = true;
+  credenzaGroup.add(tvFrame);
+
+  // Светящийся экран телевизора с мягким сине-голубым свечением
+  const tvScreenGeo = new THREE.PlaneGeometry(1.18, 0.68);
+  const tvScreenMat = new THREE.MeshStandardMaterial({
+    color: 0x38bdf8,
+    emissive: new THREE.Color(0x1e3a8a),
+    emissiveIntensity: 0.65,
+    roughness: 0.2
+  });
+  const tvScreen = new THREE.Mesh(tvScreenGeo, tvScreenMat);
+  tvScreen.position.set(0, 0.88, 0.017);
+  credenzaGroup.add(tvScreen);
+
+  // Мягкая подсветка от телевизора (акцентная)
+  const tvLight = new THREE.PointLight(0x60a5fa, 0.15, 2.0);
+  tvLight.position.set(0, 0.88, 0.25);
+  credenzaGroup.add(tvLight);
+
+  group.add(credenzaGroup);
+
+  // 6. ЗЕЛЕНОЕ РАСТЕНИЕ В МИНИМАЛИСТИЧНОМ КЕРАМИЧЕСКОМ ГОРШКЕ (В ЛЕВОМ УГЛУ)
+  const plantGroup = new THREE.Group();
+  plantGroup.position.set(-1.65, 0, -1.65);
+
+  const potMat = new THREE.MeshStandardMaterial({ color: 0xdcd8d0, roughness: 0.85 });
+  const pot = new THREE.Mesh(new THREE.CylinderGeometry(0.20, 0.15, 0.38, 24), potMat);
+  pot.position.y = 0.19;
+  pot.castShadow = pot.receiveShadow = true;
+  plantGroup.add(pot);
+
+  const soilMat = new THREE.MeshStandardMaterial({ color: 0x3e2723, roughness: 0.9 });
+  const soil = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.18, 0.04, 16), soilMat);
+  soil.position.y = 0.37;
+  plantGroup.add(soil);
+
+  const stemMat = new THREE.MeshStandardMaterial({ color: 0x2e7d32, roughness: 0.5 });
+  const mainStem = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.02, 0.65, 12), stemMat);
+  mainStem.position.y = 0.65;
+  mainStem.castShadow = true;
+  plantGroup.add(mainStem);
+
+  const leafMat = new THREE.MeshStandardMaterial({ color: 0x16a34a, roughness: 0.35, side: THREE.DoubleSide });
+  const leafAngles = [0, 0.9, 1.8, 2.7, 3.6, 4.5, 5.4];
+  leafAngles.forEach((ang, idx) => {
+    const leafGeo = new THREE.PlaneGeometry(0.26, 0.36);
+    const leaf = new THREE.Mesh(leafGeo, leafMat);
+    const ly = 0.48 + idx * 0.07;
+    leaf.position.set(Math.cos(ang) * 0.16, ly, Math.sin(ang) * 0.16);
+    leaf.rotation.x = 0.45;
+    leaf.rotation.y = ang;
+    leaf.castShadow = true;
+    plantGroup.add(leaf);
+  });
+
+  group.add(plantGroup);
+
+  // 7. НАСТЕННЫЕ ПОЛОЧКИ С КНИГАМИ И ДЕКОРОМ (СЛЕВА НА СТЕНЕ)
+  const shelfWoodMat = new THREE.MeshStandardMaterial({ color: 0xca8a04, roughness: 0.4 });
+  const shelf1 = new THREE.Mesh(new THREE.BoxGeometry(0.85, 0.03, 0.18), shelfWoodMat);
+  shelf1.position.set(-0.85, 1.45, -2.05);
+  shelf1.castShadow = shelf1.receiveShadow = true;
+  group.add(shelf1);
+
+  // Книги на первой полке
+  const bookColors = [0xef4444, 0x3b82f6, 0x10b981, 0xec4899, 0x8b5cf6];
+  bookColors.forEach((col, bIdx) => {
+    const book = new THREE.Mesh(
+      new THREE.BoxGeometry(0.045, 0.18, 0.13),
+      new THREE.MeshStandardMaterial({ color: col, roughness: 0.6 })
+    );
+    book.position.set(-1.12 + bIdx * 0.055, 1.555, -2.03);
+    book.castShadow = true;
+    group.add(book);
+  });
+
+  // Вторая полка выше
+  const shelf2 = new THREE.Mesh(new THREE.BoxGeometry(0.65, 0.03, 0.18), shelfWoodMat);
+  shelf2.position.set(-0.75, 1.82, -2.05);
+  shelf2.castShadow = shelf2.receiveShadow = true;
+  group.add(shelf2);
+
+  // Маленький суккулент на второй полке
+  const miniPot = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.03, 0.07, 12), potMat);
+  miniPot.position.set(-0.62, 1.87, -2.03);
+  miniPot.castShadow = true;
+  group.add(miniPot);
+  const miniPlant = new THREE.Mesh(new THREE.SphereGeometry(0.045, 8, 8), leafMat);
+  miniPlant.position.set(-0.62, 1.92, -2.03);
+  miniPlant.castShadow = true;
+  group.add(miniPlant);
+
+  // 8. Постер пары на стене в аккуратной рамке
+  const posterGroup = new THREE.Group();
+  posterGroup.position.set(0.85, 2.05, -2.07);
+  const frame = new THREE.Mesh(new THREE.BoxGeometry(0.88, 0.68, 0.04), new THREE.MeshStandardMaterial({ color: 0xd97706, roughness: 0.35, metalness: 0.1 }));
+  frame.castShadow = true;
+  posterGroup.add(frame);
+  const pCanvas = document.createElement('canvas');
+  pCanvas.width = 256; pCanvas.height = 192;
+  const pCtx = pCanvas.getContext('2d');
+  pCtx.fillStyle = '#ded7d0'; pCtx.fillRect(0, 0, 256, 192);
+  pCtx.fillStyle = '#e11d48'; pCtx.font = 'bold 24px sans-serif'; pCtx.textAlign = 'center';
+  pCtx.fillText('Лёля + Любимый', 128, 70);
+  pCtx.font = '38px sans-serif'; pCtx.fillText('💖', 128, 120);
+  pCtx.font = '13px sans-serif'; pCtx.fillStyle = '#9f1239'; pCtx.fillText('Вместе навсегда ✨', 128, 155);
+  const posterMesh = new THREE.Mesh(new THREE.PlaneGeometry(0.80, 0.60), new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(pCanvas) }));
+  posterMesh.position.z = 0.022;
+  posterGroup.add(posterMesh);
+  group.add(posterGroup);
+
+  scene.add(group);
+}
+
+// ─── 2. КУХНЯ (X = 14): ОБЕДЕННЫЙ СТОЛ, СТУЛ СО СПИНКОЙ, ШКАФЧИКИ, БРА ────────
+function buildKitchenRoom(ox) {
+  const group = new THREE.Group();
+  group.position.x = ox;
+
+  // Пол кухни (#b59d84, roughness: 0.9)
+  const floorGeo = new THREE.PlaneGeometry(5.2, 4.4);
+  const floorMat = createCheckerMaterial('#b59d84', '#9e856e');
+  const floor = new THREE.Mesh(floorGeo, floorMat);
+  floor.rotation.x = -Math.PI / 2;
+  floor.position.y = baseY;
+  floor.receiveShadow = true;
+  group.add(floor);
+
+  // Фартук кухни: матовая плитка (#d8d2c4, roughness: 0.9)
+  const wallMat = createTileMaterial('#d8d2c4', '#c5beae');
+  const backWall = new THREE.Mesh(new THREE.PlaneGeometry(5.2, 3.6), wallMat);
+  backWall.position.set(0, baseY + 1.8, -2.1);
+  backWall.receiveShadow = true;
+  group.add(backWall);
+
+  // Навесные кухонные шкафчики с ручками
+  const cabMat = new THREE.MeshStandardMaterial({ color: 0xd8d2c4, roughness: 0.90, metalness: 0.0 });
+  const handleMat = new THREE.MeshStandardMaterial({ color: 0x94a3b8, metalness: 0.8, roughness: 0.2 });
+  const cabGroup = new THREE.Group();
+  cabGroup.position.set(-0.8, baseY + 2.3, -1.9);
+
+  const cab1 = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.75, 0.35), cabMat);
+  cab1.castShadow = true;
+  cab1.receiveShadow = true;
+  cabGroup.add(cab1);
+
+  // Хромированные ручки шкафчиков
+  [-0.35, 0.35].forEach(hx => {
+    const handle = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.02, 0.03), handleMat);
+    handle.position.set(hx, -0.22, 0.19);
+    handle.castShadow = true;
+    cabGroup.add(handle);
+  });
+  group.add(cabGroup);
+
+  // ── ОБЕДЕННЫЙ СТУЛ СО СПИНКОЙ (персонаж сидит на нем на z = 0.15) ──
+  const chairGroup = new THREE.Group();
+  chairGroup.position.set(0, 0, 0.15);
+  const chairWoodMat = new THREE.MeshStandardMaterial({ color: 0x78350f, roughness: 0.45 });
+
+  // Сиденье стула на высоте y = 0.36
+  const chairSeat = new THREE.Mesh(new THREE.BoxGeometry(0.56, 0.04, 0.48), chairWoodMat);
+  chairSeat.position.y = 0.36;
+  chairSeat.castShadow = chairSeat.receiveShadow = true;
+  chairGroup.add(chairSeat);
+
+  // Мягкая подушечка на сиденье
+  const chairCushion = new THREE.Mesh(new THREE.BoxGeometry(0.50, 0.03, 0.44), new THREE.MeshStandardMaterial({ color: 0xd8d2c4, roughness: 0.9, metalness: 0.0 }));
+  chairCushion.position.y = 0.38;
+  chairCushion.castShadow = chairCushion.receiveShadow = true;
+  chairGroup.add(chairCushion);
+
+  // 4 ножки стула от y = 0 до y = 0.34
+  [[-0.24, -0.20], [0.24, -0.20], [-0.24, 0.20], [0.24, 0.20]].forEach(([cx, cz]) => {
+    const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.018, 0.36, 12), chairWoodMat);
+    leg.position.set(cx, 0.18, cz);
+    leg.castShadow = leg.receiveShadow = true;
+    chairGroup.add(leg);
+  });
+
+  // Спинка стула сзади персонажа
+  [[-0.24, -0.21], [0.24, -0.21]].forEach(([sx, sz]) => {
+    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.018, 0.42, 12), chairWoodMat);
+    pole.position.set(sx, 0.58, sz);
+    pole.castShadow = pole.receiveShadow = true;
+    chairGroup.add(pole);
+  });
+  const backRailTop = new THREE.Mesh(new THREE.BoxGeometry(0.54, 0.10, 0.04), chairWoodMat);
+  backRailTop.position.set(0, 0.76, -0.21);
+  backRailTop.castShadow = backRailTop.receiveShadow = true;
+  chairGroup.add(backRailTop);
+
+  const backRailMid = new THREE.Mesh(new THREE.BoxGeometry(0.48, 0.05, 0.03), chairWoodMat);
+  backRailMid.position.set(0, 0.58, -0.21);
+  backRailMid.castShadow = backRailMid.receiveShadow = true;
+  chairGroup.add(backRailMid);
+
+  group.add(chairGroup);
+
+  // ── ДЕРЕВЯННЫЙ ОБЕДЕННЫЙ СТОЛ (ОПУЩЕН ДО УРОВНЯ ПОЯСА В СТИЛЕ TALKING TOM) ──
+  const tableGroup = new THREE.Group();
+  tableGroup.position.set(0, 0, 0.52);
+
+  const tableTopMat = new THREE.MeshStandardMaterial({ color: 0xb45309, roughness: 0.45 });
+  // Столешница на высоте пояса y = 0.46
+  const tableTop = new THREE.Mesh(new THREE.BoxGeometry(1.30, 0.04, 0.62), tableTopMat);
+  tableTop.position.y = 0.46;
+  tableTop.castShadow = tableTop.receiveShadow = true;
+  tableGroup.add(tableTop);
+
+  // Подстолье (царга)
+  const apron = new THREE.Mesh(new THREE.BoxGeometry(1.22, 0.035, 0.54), tableTopMat);
+  apron.position.y = 0.42;
+  apron.castShadow = apron.receiveShadow = true;
+  tableGroup.add(apron);
+
+  // Ножки стола
+  const legMat = new THREE.MeshStandardMaterial({ color: 0x78350f, roughness: 0.5 });
+  [[-0.55, -0.23], [0.55, -0.23], [-0.55, 0.23], [0.55, 0.23]].forEach(([lx, lz]) => {
+    const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.032, 0.024, 0.435, 16), legMat);
+    leg.position.set(lx, 0.2175, lz);
+    leg.castShadow = leg.receiveShadow = true;
+    tableGroup.add(leg);
+  });
+
+  // Сервировочная салфетка / скатерть на столе (матовый лен #b8a692, roughness: 0.9)
+  const clothMat = new THREE.MeshStandardMaterial({ color: 0xb8a692, roughness: 0.90, metalness: 0.0 });
+  const placemat = new THREE.Mesh(new THREE.BoxGeometry(0.56, 0.010, 0.38), clothMat);
+  placemat.position.set(0, 0.485, -0.04);
+  placemat.receiveShadow = true;
+  tableGroup.add(placemat);
+
+  // Сервировочная тарелка ПЕРЕД персонажем (матовый фарфор #d8d2c4)
+  const plateMat = new THREE.MeshStandardMaterial({ color: 0xd8d2c4, roughness: 0.90, metalness: 0.0 });
+  const plate = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.15, 0.022, 24), plateMat);
+  plate.position.set(0, 0.50, -0.04);
+  plate.castShadow = plate.receiveShadow = true;
+  tableGroup.add(plate);
+
+  // Аппетитное пирожное с ягодкой на тарелке
+  const tartBase = new THREE.Mesh(new THREE.CylinderGeometry(0.065, 0.045, 0.025, 16), new THREE.MeshStandardMaterial({ color: 0xd97706, roughness: 0.6 }));
+  tartBase.position.set(0, 0.52, -0.04);
+  tartBase.castShadow = true;
+  tableGroup.add(tartBase);
+
+  const tartCream = new THREE.Mesh(new THREE.SphereGeometry(0.038, 12, 12), new THREE.MeshStandardMaterial({ color: 0xd8d2c4, roughness: 0.8 }));
+  tartCream.position.set(0, 0.545, -0.04);
+  tartCream.castShadow = true;
+  tableGroup.add(tartCream);
+
+  const tartBerry = new THREE.Mesh(new THREE.SphereGeometry(0.018, 10, 10), new THREE.MeshStandardMaterial({ color: 0xe11d48, roughness: 0.4 }));
+  tartBerry.position.set(0, 0.575, -0.04);
+  tartBerry.castShadow = true;
+  tableGroup.add(tartBerry);
+
+  group.add(tableGroup);
+
+  scene.add(group);
+}
+
+// ─── 3. ВАННАЯ (X = 28): КАФЕЛЬ, ПОДДОН, СМЕСИТЕЛЬ С ВЕНТИЛЯМИ, ДУШ ──────────
+function buildBathroomRoom(ox) {
+  const group = new THREE.Group();
+  group.position.x = ox;
+
+  // Пол: пастельная небесная плитка #bfdbfe (roughness: 0.9)
+  const floorGeo = new THREE.PlaneGeometry(5.2, 4.4);
+  const floorMat = createTileMaterial('#bfdbfe', '#93c5fd');
+  const floor = new THREE.Mesh(floorGeo, floorMat);
+  floor.rotation.x = -Math.PI / 2;
+  floor.position.y = baseY;
+  floor.receiveShadow = true;
+  group.add(floor);
+
+  // Стены: мягкий матовый голубой тон (#bfdbfe)
+  const wallMat = createTileMaterial('#bfdbfe', '#93c5fd');
+  const backWall = new THREE.Mesh(new THREE.PlaneGeometry(5.2, 3.6), wallMat);
+  backWall.position.set(0, baseY + 1.8, -2.1);
+  backWall.receiveShadow = true;
+  group.add(backWall);
+
+  // Ванна / поддон с бортиками и сливом (матовый акрил #93c5fd)
+  const tubGroup = new THREE.Group();
+  tubGroup.position.set(0, 0, 0);
+
+  const acrylicMat = new THREE.MeshStandardMaterial({ color: 0x93c5fd, roughness: 0.90, metalness: 0.0 });
+  // Основание поддона
+  const tubBase = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.04, 1.5), acrylicMat);
+  tubBase.position.y = 0.02;
+  tubBase.receiveShadow = true;
+  tubGroup.add(tubBase);
+
+  // Бортики ванны
+  const rimFront = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.18, 0.10), acrylicMat);
+  rimFront.position.set(0, 0.11, 0.70);
+  rimFront.castShadow = rimFront.receiveShadow = true;
+  tubGroup.add(rimFront);
+
+  const rimBack = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.18, 0.10), acrylicMat);
+  rimBack.position.set(0, 0.11, -0.70);
+  rimBack.castShadow = rimBack.receiveShadow = true;
+  tubGroup.add(rimBack);
+
+  const rimLeft = new THREE.Mesh(new THREE.BoxGeometry(0.10, 0.18, 1.3), acrylicMat);
+  rimLeft.position.set(-0.80, 0.11, 0);
+  rimLeft.castShadow = rimLeft.receiveShadow = true;
+  tubGroup.add(rimLeft);
+
+  const rimRight = new THREE.Mesh(new THREE.BoxGeometry(0.10, 0.18, 1.3), acrylicMat);
+  rimRight.position.set(0.80, 0.11, 0);
+  rimRight.castShadow = rimRight.receiveShadow = true;
+  tubGroup.add(rimRight);
+
+  // Хромированный слив в центре поддона
+  const drainMat = new THREE.MeshStandardMaterial({ color: 0xcfd8dc, metalness: 0.95, roughness: 0.08 });
+  const drain = new THREE.Mesh(new THREE.CylinderGeometry(0.065, 0.065, 0.015, 16), drainMat);
+  drain.position.set(0, 0.041, 0);
+  drain.receiveShadow = true;
+  tubGroup.add(drain);
+
+  group.add(tubGroup);
+
+  // Металлическая хромированная стойка душа
+  const chromeMat = new THREE.MeshStandardMaterial({ color: 0xd1d5db, roughness: 0.35, metalness: 0.8 });
+  const showerPipe = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.022, 2.45), chromeMat);
+  showerPipe.position.set(0.78, 1.225, -1.98);
+  showerPipe.castShadow = true;
+  group.add(showerPipe);
+
+  // ХРОМИРОВАННЫЙ СМЕСИТЕЛЬ С ВЕНТИЛЯМИ И ИЗЛИВОМ
+  const mixerGroup = new THREE.Group();
+  mixerGroup.position.set(0.78, 1.05, -1.94);
+
+  const mixerBody = new THREE.Mesh(new THREE.BoxGeometry(0.20, 0.08, 0.10), chromeMat);
+  mixerBody.castShadow = true;
+  mixerGroup.add(mixerBody);
+
+  // Излив смесителя
+  const spout = new THREE.Mesh(new THREE.CylinderGeometry(0.016, 0.016, 0.15, 12), chromeMat);
+  spout.position.set(0, -0.06, 0.07);
+  spout.rotation.x = 0.5;
+  spout.castShadow = true;
+  mixerGroup.add(spout);
+
+  // Вентиль горячей воды (с красной точкой)
+  const valveHot = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.035, 16), chromeMat);
+  valveHot.position.set(-0.08, 0, 0.06);
+  valveHot.rotation.x = Math.PI / 2;
+  valveHot.castShadow = true;
+  mixerGroup.add(valveHot);
+  const hotDot = new THREE.Mesh(new THREE.CircleGeometry(0.014, 12), new THREE.MeshBasicMaterial({ color: 0xef4444 }));
+  hotDot.position.set(-0.08, 0, 0.079);
+  mixerGroup.add(hotDot);
+
+  // Вентиль холодной воды (с синей точкой)
+  const valveCold = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.035, 16), chromeMat);
+  valveCold.position.set(0.08, 0, 0.06);
+  valveCold.rotation.x = Math.PI / 2;
+  valveCold.castShadow = true;
+  mixerGroup.add(valveCold);
+  const coldDot = new THREE.Mesh(new THREE.CircleGeometry(0.014, 12), new THREE.MeshBasicMaterial({ color: 0x3b82f6 }));
+  coldDot.position.set(0.08, 0, 0.079);
+  mixerGroup.add(coldDot);
+
+  group.add(mixerGroup);
+
+  // Круглая верхняя лейка душа
+  const showerArm = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.55), chromeMat);
+  showerArm.position.set(0.78, 2.45, -1.72);
+  showerArm.rotation.x = Math.PI / 2;
+  showerArm.castShadow = true;
+  group.add(showerArm);
+
+  const showerHead = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.08, 0.04, 24), chromeMat);
+  showerHead.position.set(0.78, 2.43, -1.45);
+  showerHead.rotation.x = 0.2;
+  showerHead.castShadow = true;
+  group.add(showerHead);
+
+  // Зеркало на стене с легким синим отражением
+  const mirror = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 1.1), new THREE.MeshStandardMaterial({ color: 0xc7d2fe, roughness: 0.05, metalness: 0.9 }));
+  mirror.position.set(-0.85, 1.8, -2.08);
+  mirror.receiveShadow = true;
+  group.add(mirror);
+
+  // Сетка падающих частиц воды для душа (Three.js Points)
+  initWaterDropParticles(group);
+
+  scene.add(group);
+}
+
+// ─── 4. СПАЛЬНЯ (X = 42): КРОВАТЬ, ТУМБОЧКА, ЛАМПА, ОКНО С НОЧНЫМ НЕБОМ ────────
+function buildBedroomRoom(ox) {
+  const group = new THREE.Group();
+  group.position.x = ox;
+
+  // 1. Пол в спальне: глубокий темный шоколадно-ореховый паркет с выраженным рельефом (#3c2214)
+  const floorGeo = new THREE.PlaneGeometry(5.2, 4.4);
+  const floorMat = createWoodFloorMaterial('#3c2214', '#241208');
+  floorMat.roughness = 0.78;
+  const floor = new THREE.Mesh(floorGeo, floorMat);
+  floor.rotation.x = -Math.PI / 2;
+  floor.position.y = baseY;
+  floor.receiveShadow = true;
+  group.add(floor);
+
+  // Стены: пастельная лаванда (#c4b5fd, roughness: 0.9)
+  const wallMat = createWallPaperMaterial('#c4b5fd', '#b29ff5');
+  const backWall = new THREE.Mesh(new THREE.PlaneGeometry(5.2, 3.6), wallMat);
+  backWall.position.set(0, baseY + 1.8, -2.1);
+  backWall.receiveShadow = true;
+  group.add(backWall);
+
+  // Плинтус из темного эспрессо-дерева (#241208)
+  const bb = new THREE.Mesh(new THREE.BoxGeometry(5.2, 0.12, 0.05), new THREE.MeshStandardMaterial({ color: 0x241208, roughness: 0.85, metalness: 0.0 }));
+  bb.position.set(0, baseY + 0.06, -2.08);
+  bb.receiveShadow = true;
+  group.add(bb);
+
+  // 2. Глубокая контактная тень на полу строго под каркасом кровати (ambient occlusion)
+  const shadowCanvas = document.createElement('canvas');
+  shadowCanvas.width = shadowCanvas.height = 256;
+  const sCtx = shadowCanvas.getContext('2d');
+  const sGrad = sCtx.createRadialGradient(128, 128, 30, 128, 128, 124);
+  sGrad.addColorStop(0, 'rgba(10, 5, 2, 0.96)');
+  sGrad.addColorStop(0.55, 'rgba(10, 5, 2, 0.70)');
+  sGrad.addColorStop(0.85, 'rgba(10, 5, 2, 0.25)');
+  sGrad.addColorStop(1, 'rgba(10, 5, 2, 0.0)');
+  sCtx.fillStyle = sGrad;
+  sCtx.fillRect(0, 0, 256, 256);
+  const shadowTex = new THREE.CanvasTexture(shadowCanvas);
+  const bedShadow = new THREE.Mesh(
+    new THREE.PlaneGeometry(1.80, 2.10),
+    new THREE.MeshBasicMaterial({
+      map: shadowTex,
+      transparent: true,
+      opacity: 0.95,
+      depthWrite: false
+    })
+  );
+  bedShadow.rotation.x = -Math.PI / 2;
+  bedShadow.position.set(0, baseY + 0.002, -0.65);
+  group.add(bedShadow);
+
+  // 3. ДИЗАЙНЕРСКАЯ КРОВАТЬ НА НОЖКАХ С ВОЗДУШНЫМ ЗАЗОРОМ (y=0..0.15) И ВЫСОКИМ КОНТРАСТОМ
+  const bedGroup = new THREE.Group();
+  bedGroup.position.set(0, 0, 0);
+
+  // Материалы:
+  // Каркас: теплый медовый дуб (#c28542)
+  const bedOakMat = new THREE.MeshStandardMaterial({ color: 0xc28542, roughness: 0.65, metalness: 0.0 });
+  // Контрастный темный эспрессо-кант и ножки (#241208)
+  const bedDarkMat = new THREE.MeshStandardMaterial({ color: 0x241208, roughness: 0.75, metalness: 0.0 });
+  // Золотые латунные наконечники ножек
+  const brassCapMat = new THREE.MeshStandardMaterial({ color: 0xd4af37, roughness: 0.25, metalness: 0.85 });
+
+  // 4 изящные ножки с латунными наконечниками (высота 0.15м - между полом и каркасом чистый просвет!)
+  const legGeo = new THREE.CylinderGeometry(0.038, 0.028, 0.15, 16);
+  const brassGeo = new THREE.CylinderGeometry(0.030, 0.028, 0.035, 16);
+  [[-0.74, -1.50], [0.74, -1.50], [-0.74, 0.22], [0.74, 0.22]].forEach(([lx, lz]) => {
+    const legMesh = new THREE.Mesh(legGeo, bedDarkMat);
+    legMesh.position.set(lx, 0.075, lz);
+    legMesh.castShadow = legMesh.receiveShadow = true;
+    bedGroup.add(legMesh);
+
+    const brassMesh = new THREE.Mesh(brassGeo, brassCapMat);
+    brassMesh.position.set(lx, 0.0175, lz);
+    brassMesh.castShadow = true;
+    bedGroup.add(brassMesh);
+  });
+
+  // Нижняя темная окантовка каркаса (y = 0.15..0.17) - четкая граница с тенью
+  const baseRail = new THREE.Mesh(new THREE.BoxGeometry(1.64, 0.025, 1.86), bedDarkMat);
+  baseRail.position.set(0, 0.1625, -0.64);
+  baseRail.castShadow = baseRail.receiveShadow = true;
+  bedGroup.add(baseRail);
+
+  // Основной деревянный каркас кровати теплого дуба (y = 0.175..0.33)
+  const bedBase = new THREE.Mesh(new THREE.BoxGeometry(1.62, 0.16, 1.84), bedOakMat);
+  bedBase.position.set(0, 0.255, -0.64);
+  bedBase.castShadow = bedBase.receiveShadow = true;
+  bedGroup.add(bedBase);
+
+  // Высокое деревянное изголовье у стены (z = -1.58, высота 1.20м)
+  const headboardFrame = new THREE.Mesh(new THREE.BoxGeometry(1.66, 1.20, 0.10), bedDarkMat);
+  headboardFrame.position.set(0, 0.75, -1.58);
+  headboardFrame.castShadow = headboardFrame.receiveShadow = true;
+  bedGroup.add(headboardFrame);
+
+  // Внутренняя панель изголовья теплого дуба
+  const headboardPanel = new THREE.Mesh(new THREE.BoxGeometry(1.52, 0.96, 0.04), bedOakMat);
+  headboardPanel.position.set(0, 0.78, -1.52);
+  headboardPanel.castShadow = headboardPanel.receiveShadow = true;
+  bedGroup.add(headboardPanel);
+
+  // 4. МАТРАС (y = 0.33..0.50): белоснежная простыня (#ffffff)
+  const mattressMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.85, metalness: 0.0 });
+  const mattress = new THREE.Mesh(new THREE.BoxGeometry(1.52, 0.17, 1.78), mattressMat);
+  mattress.position.set(0, 0.415, -0.64);
+  mattress.castShadow = mattress.receiveShadow = true;
+  bedGroup.add(mattress);
+
+  // 5. ТЕКСТИЛЬ И ПОКРЫВАЛО: контрастный уютный насыщенный ягодно-розовый (#d43f68)
+  const blanketMat = new THREE.MeshStandardMaterial({ color: 0xd43f68, roughness: 0.85, metalness: 0.0 });
+  const blanket = new THREE.Mesh(new THREE.BoxGeometry(1.56, 0.09, 1.20), blanketMat);
+  blanket.position.set(0, 0.525, -0.36);
+  blanket.castShadow = blanket.receiveShadow = true;
+  bedGroup.add(blanket);
+
+  // Мягкий подворот одеяла у изголовья (нежный зефирно-розовый #fed7e2)
+  const blanketFlapMat = new THREE.MeshStandardMaterial({ color: 0xfed7e2, roughness: 0.88, metalness: 0.0 });
+  const blanketFlap = new THREE.Mesh(new THREE.BoxGeometry(1.56, 0.07, 0.18), blanketFlapMat);
+  blanketFlap.position.set(0, 0.54, -0.95);
+  blanketFlap.castShadow = blanketFlap.receiveShadow = true;
+  bedGroup.add(blanketFlap);
+
+  // Роскошный прикроватный плед-дорожка в изножье (глубокий сливовый сатин #6b2148)
+  const runnerMat = new THREE.MeshStandardMaterial({ color: 0x6b2148, roughness: 0.80, metalness: 0.0 });
+  const bedRunner = new THREE.Mesh(new THREE.BoxGeometry(1.58, 0.04, 0.28), runnerMat);
+  bedRunner.position.set(0, 0.56, 0.12);
+  bedRunner.castShadow = bedRunner.receiveShadow = true;
+  bedGroup.add(bedRunner);
+
+  // Две белоснежные подушки
+  const pillowMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.95, metalness: 0.0 });
+  const pillow1 = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.13, 0.36), pillowMat);
+  pillow1.position.set(-0.36, 0.57, -1.25);
+  pillow1.rotation.x = 0.10;
+  pillow1.castShadow = pillow1.receiveShadow = true;
+  bedGroup.add(pillow1);
+
+  const pillow2 = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.13, 0.36), pillowMat);
+  pillow2.position.set(0.36, 0.57, -1.25);
+  pillow2.rotation.x = 0.10;
+  pillow2.castShadow = pillow2.receiveShadow = true;
+  bedGroup.add(pillow2);
+
+  // Декоративная мини-подушечка по центру
+  const accentPillow = new THREE.Mesh(new THREE.BoxGeometry(0.38, 0.12, 0.24), blanketMat);
+  accentPillow.position.set(0, 0.58, -1.05);
+  accentPillow.rotation.x = 0.18;
+  accentPillow.castShadow = accentPillow.receiveShadow = true;
+  bedGroup.add(accentPillow);
+
+  group.add(bedGroup);
+
+  // 6. ТУМБОЧКА И НАСТОЛЬНЫЙ СВЕТИЛЬНИК С АБАЖУРОМ
+  const standMat = new THREE.MeshStandardMaterial({ color: 0x241208, roughness: 0.75 });
+  const stand = new THREE.Mesh(new THREE.BoxGeometry(0.50, 0.46, 0.46), standMat);
+  stand.position.set(-1.18, 0.23, -1.15);
+  stand.castShadow = stand.receiveShadow = true;
+  stand.userData = { isLamp: true };
+  group.add(stand);
+
+  // Выдвижной ящичек теплого дуба
+  const drawerFront = new THREE.Mesh(new THREE.BoxGeometry(0.44, 0.16, 0.02), bedOakMat);
+  drawerFront.position.set(-1.18, 0.32, -0.91);
+  group.add(drawerFront);
+
+  // Светильник на тумбочке
+  const lampGroup = new THREE.Group();
+  lampGroup.position.set(-1.20, 0.50, -1.10);
+
+  const brassMat = new THREE.MeshStandardMaterial({ color: 0xd4af37, metalness: 0.85, roughness: 0.15 });
+  const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.08, 0.28), brassMat);
+  stem.position.y = 0.14;
+  stem.castShadow = true;
+  lampGroup.add(stem);
+
+  // Полупрозрачный абажур (CylinderGeometry)
+  const shadeMat = new THREE.MeshStandardMaterial({
+    color: 0xded08a, roughness: 0.6,
+    emissive: new THREE.Color(0xd97706),
+    emissiveIntensity: 0.5
+  });
+  bedroomShadeMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.24, 0.28, 24, 1, true), shadeMat);
+  bedroomShadeMesh.position.y = 0.38;
+  bedroomShadeMesh.castShadow = true;
+  bedroomShadeMesh.userData = { isLamp: true };
+  lampGroup.add(bedroomShadeMesh);
+
+  // Акцентный теплый PointLight (2700K = 0xff9e44) внутри абажура с тенями
+  bedroomLampLight = new THREE.PointLight(0xff9e44, 1.0, 5.5);
+  bedroomLampLight.position.y = 0.38;
+  bedroomLampLight.castShadow = true;
+  bedroomLampLight.shadow.bias = -0.001;
+  lampGroup.add(bedroomLampLight);
+
+  group.add(lampGroup);
+
+  // ── ОКНО С ТЕМНОЙ ПЛОСКОСТЬЮ НОЧНОГО НЕБА И ЗВЕЗД ──
+  const winGroup = new THREE.Group();
+  winGroup.position.set(1.0, 1.85, -2.05);
+
+  const skyCanvas = document.createElement('canvas');
+  skyCanvas.width = skyCanvas.height = 256;
+  drawNightSky(skyCanvas);
+  const skyTex = new THREE.CanvasTexture(skyCanvas);
+  bedroomWindowSkyMesh = new THREE.Mesh(new THREE.PlaneGeometry(1.5, 1.7), new THREE.MeshBasicMaterial({ map: skyTex }));
+  bedroomWindowSkyMesh.position.z = -0.02;
+  winGroup.add(bedroomWindowSkyMesh);
+
+  const frameMat = new THREE.MeshStandardMaterial({ color: 0xdcd8d0, roughness: 0.8 });
+  const winFrame = new THREE.Mesh(new THREE.BoxGeometry(1.6, 1.8, 0.05), frameMat);
+  winFrame.castShadow = true;
+  winGroup.add(winFrame);
+  group.add(winGroup);
+
+  scene.add(group);
+}
+
+// ─── ПРОЦЕДУРНЫЕ PBR-ТЕКСТУРЫ КОМНАТ С BUMP-КАРТАМИ ──────────────────────────
+function createWoodFloorMaterial(c1, c2) {
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = 512;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = c1; ctx.fillRect(0, 0, 512, 512);
+
+  const bumpCanvas = document.createElement('canvas');
+  bumpCanvas.width = bumpCanvas.height = 512;
+  const bCtx = bumpCanvas.getContext('2d');
+  bCtx.fillStyle = '#808080'; bCtx.fillRect(0, 0, 512, 512);
+
+  const ph = 32, pw = 128;
+  for (let y = 0; y < 512; y += ph) {
+    const shift = (y / ph) % 2 === 0 ? 0 : pw / 2;
+    for (let x = -pw; x < 512 + pw; x += pw) {
+      ctx.fillStyle = c2;
+      ctx.globalAlpha = 0.22;
+      ctx.fillRect(x + shift, y, pw - 2, ph - 2);
+      ctx.globalAlpha = 1.0;
+      ctx.strokeStyle = 'rgba(0,0,0,0.12)';
+      ctx.strokeRect(x + shift, y, pw - 2, ph - 2);
+
+      bCtx.fillStyle = '#a0a0a0';
+      bCtx.fillRect(x + shift + 1, y + 1, pw - 4, ph - 4);
+      bCtx.strokeStyle = '#404040';
+      bCtx.strokeRect(x + shift, y, pw - 2, ph - 2);
+    }
+  }
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.repeat.set(3, 3);
+
+  const bumpTex = new THREE.CanvasTexture(bumpCanvas);
+  bumpTex.wrapS = bumpTex.wrapT = THREE.RepeatWrapping;
+  bumpTex.repeat.set(3, 3);
+
+  return new THREE.MeshStandardMaterial({
+    map: tex, bumpMap: bumpTex, bumpScale: 0.02, roughness: 0.90, metalness: 0.0
+  });
+}
+
+function createTileMaterial(c1, c2) {
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = 256;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = c1; ctx.fillRect(0, 0, 256, 256);
+  ctx.strokeStyle = c2; ctx.lineWidth = 4;
+
+  const bumpCanvas = document.createElement('canvas');
+  bumpCanvas.width = bumpCanvas.height = 256;
+  const bCtx = bumpCanvas.getContext('2d');
+  bCtx.fillStyle = '#ffffff'; bCtx.fillRect(0, 0, 256, 256);
+  bCtx.strokeStyle = '#202020'; bCtx.lineWidth = 4;
+
+  for (let i = 0; i <= 256; i += 32) {
+    ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, 256); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(0, i); ctx.lineTo(256, i); ctx.stroke();
+    bCtx.beginPath(); bCtx.moveTo(i, 0); bCtx.lineTo(i, 256); bCtx.stroke();
+    bCtx.beginPath(); bCtx.moveTo(0, i); bCtx.lineTo(256, i); bCtx.stroke();
+  }
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.repeat.set(4, 4);
+
+  const bumpTex = new THREE.CanvasTexture(bumpCanvas);
+  bumpTex.wrapS = bumpTex.wrapT = THREE.RepeatWrapping;
+  bumpTex.repeat.set(4, 4);
+
+  return new THREE.MeshStandardMaterial({
+    map: tex, bumpMap: bumpTex, bumpScale: 0.015, roughness: 0.85, metalness: 0.0
+  });
+}
+
+function createCheckerMaterial(c1, c2) {
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = 256;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = c1; ctx.fillRect(0, 0, 256, 256);
+  ctx.fillStyle = c2;
+  const sz = 32;
+  for (let y = 0; y < 256; y += sz) {
+    for (let x = 0; x < 256; x += sz) {
+      if ((x / sz + y / sz) % 2 === 0) ctx.fillRect(x, y, sz, sz);
+    }
+  }
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.repeat.set(4, 4);
+  return new THREE.MeshStandardMaterial({ map: tex, roughness: 0.90, metalness: 0.0 });
+}
+
+function createWallPaperMaterial(c1, c2) {
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = 256;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = c1; ctx.fillRect(0, 0, 256, 256);
+  ctx.fillStyle = c2;
+  for (let x = 0; x < 256; x += 32) ctx.fillRect(x, 0, 16, 256);
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.repeat.set(4, 3);
+  return new THREE.MeshStandardMaterial({ map: tex, roughness: 0.90, metalness: 0.0 });
+}
+
+function drawNightSky(canvas) {
+  const ctx = canvas.getContext('2d');
+  const grad = ctx.createLinearGradient(0, 0, 0, 256);
+  grad.addColorStop(0, '#0a0f1d'); grad.addColorStop(1, '#1e1b4b');
+  ctx.fillStyle = grad; ctx.fillRect(0, 0, 256, 256);
+
+  // Луна
+  ctx.fillStyle = '#fde047';
+  ctx.beginPath(); ctx.arc(180, 70, 26, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#0f172a';
+  ctx.beginPath(); ctx.arc(170, 65, 22, 0, Math.PI * 2); ctx.fill();
+
+  // Звезды
+  ctx.fillStyle = '#ffffff';
+  [[40, 50], [90, 80], [130, 40], [60, 140], [210, 130], [150, 160], [80, 200]].forEach(([x, y]) => {
+    ctx.fillRect(x, y, 3, 3);
+  });
+}
+
+// ─── ПРОЦЕДУРНЫЕ НОЖКИ, МИНИ-ЮБКА И СТИЛЬНЫЕ КРОССОВКИ (TALKING TOM STYLE) ───
+function createPleatedSkirtMaterial() {
+  const canvas = document.createElement('canvas');
+  canvas.width = 512;
+  canvas.height = 256;
+  const ctx = canvas.getContext('2d');
+
+  const bumpCanvas = document.createElement('canvas');
+  bumpCanvas.width = 512;
+  bumpCanvas.height = 256;
+  const bCtx = bumpCanvas.getContext('2d');
+
+  // Основной глубокий графитовый цвет ткани (#374151)
+  ctx.fillStyle = '#374151';
+  ctx.fillRect(0, 0, 512, 256);
+
+  bCtx.fillStyle = '#808080';
+  bCtx.fillRect(0, 0, 512, 256);
+
+  // 24 четкие вертикальные складки плиссировки (по числу 24 граней цилиндра)
+  const numPleats = 24;
+  const pleatWidth = 512 / numPleats;
+
+  for (let i = 0; i < numPleats; i++) {
+    const x = i * pleatWidth;
+
+    // Внутренняя тень в глубине складки (процедурные темные полоски)
+    ctx.fillStyle = '#1e242d';
+    ctx.fillRect(x, 0, pleatWidth * 0.44, 256);
+
+    // Основная освещенная грань складки
+    ctx.fillStyle = '#3f4b5d';
+    ctx.fillRect(x + pleatWidth * 0.44, 0, pleatWidth * 0.56, 256);
+
+    // Тонкий светлый блик на ребре складки
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
+    ctx.fillRect(x + pleatWidth * 0.44, 0, 1.5, 256);
+
+    // BumpMap: рельеф складок (впадина темная, гребень светлый)
+    bCtx.fillStyle = '#2d2d2d';
+    bCtx.fillRect(x, 0, pleatWidth * 0.44, 256);
+    bCtx.fillStyle = '#d0d0d0';
+    bCtx.fillRect(x + pleatWidth * 0.44, 0, pleatWidth * 0.56, 256);
+  }
+
+  // Контрастный аккуратный кант по нижнему краю юбки
+  ctx.fillStyle = '#f8fafc';
+  ctx.fillRect(0, 256 - 16, 512, 10);
+  ctx.fillStyle = '#94a3b8';
+  ctx.fillRect(0, 256 - 6, 512, 2);
+
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.wrapS = THREE.RepeatWrapping;
+  tex.wrapT = THREE.ClampToEdgeWrapping;
+
+  const bumpTex = new THREE.CanvasTexture(bumpCanvas);
+  bumpTex.wrapS = THREE.RepeatWrapping;
+  bumpTex.wrapT = THREE.ClampToEdgeWrapping;
+
+  return new THREE.MeshStandardMaterial({
+    map: tex,
+    bumpMap: bumpTex,
+    bumpScale: 0.035,
+    roughness: 0.85,
+    metalness: 0.02
+  });
+}
+
+function buildCharacterLegs() {
+  const legsGroup = new THREE.Group();
+  legsGroup.name = 'characterLegs';
+
+  // Аккуратная плиссированная юбка (верх 0.106, низ 0.145, высота 0.13, 24 сегмента)
+  const skirtMat = createPleatedSkirtMaterial();
+  const skirtGeo = new THREE.CylinderGeometry(0.106, 0.145, 0.13, 24, 1, false);
+  const skirt = new THREE.Mesh(skirtGeo, skirtMat);
+  skirt.position.set(0, 0.43, 0);
+  skirt.rotation.set(0, 0, 0); // Строго горизонтально и симметрично относительно ног
+  skirt.castShadow = true;
+  legsGroup.add(skirt);
+
+  // Контрастный аккуратный кант по нижнему краю
+  const hemGeo = new THREE.CylinderGeometry(0.1455, 0.1465, 0.008, 24, 1, true);
+  const hemMat = new THREE.MeshStandardMaterial({
+    color: 0xf8fafc,
+    roughness: 0.70,
+    metalness: 0.05
+  });
+  const hemTrim = new THREE.Mesh(hemGeo, hemMat);
+  hemTrim.position.set(0, 0.43 - 0.065, 0);
+  hemTrim.rotation.set(0, 0, 0);
+  legsGroup.add(hemTrim);
+
+  // Ножки в стильных черных колготках / легинсах
+  const legMat = new THREE.MeshStandardMaterial({
+    color: 0x18181b,
+    roughness: 0.85,
+    metalness: 0.0
+  });
+
+  const sneakerWhiteMat = new THREE.MeshStandardMaterial({ color: 0xe2e2e2, roughness: 0.85 });
+  const sneakerPinkMat = new THREE.MeshStandardMaterial({ color: 0xf472b6, roughness: 0.70 });
+  const sneakerSoleMat = new THREE.MeshStandardMaterial({ color: 0xe5e5e5, roughness: 0.90 });
+
+  [-0.055, 0.055].forEach(lx => {
+    const legSub = new THREE.Group();
+    legSub.position.x = lx;
+
+    // Бедро
+    const thigh = new THREE.Mesh(new THREE.CylinderGeometry(0.042, 0.034, 0.18, 16), legMat);
+    thigh.position.y = 0.30;
+    thigh.castShadow = true;
+    legSub.add(thigh);
+
+    // Голень
+    const calf = new THREE.Mesh(new THREE.CylinderGeometry(0.034, 0.026, 0.18, 16), legMat);
+    calf.position.y = 0.15;
+    calf.castShadow = true;
+    legSub.add(calf);
+
+    // Розовый манжет кроссовок / носочек
+    const cuff = new THREE.Mesh(new THREE.CylinderGeometry(0.033, 0.031, 0.04, 16), sneakerPinkMat);
+    cuff.position.y = 0.065;
+    cuff.castShadow = true;
+    legSub.add(cuff);
+
+    // Белый корпус кроссовка
+    const shoe = new THREE.Mesh(new THREE.BoxGeometry(0.065, 0.05, 0.14), sneakerWhiteMat);
+    shoe.position.set(0, 0.035, 0.025);
+    shoe.castShadow = true;
+    legSub.add(shoe);
+
+    // Розовый мысок
+    const toe = new THREE.Mesh(new THREE.CylinderGeometry(0.032, 0.032, 0.05, 16, 1, false, 0, Math.PI), sneakerPinkMat);
+    toe.rotation.z = Math.PI / 2;
+    toe.rotation.x = Math.PI / 2;
+    toe.position.set(0, 0.035, 0.085);
+    toe.castShadow = true;
+    legSub.add(toe);
+
+    // Подошва платформы
+    const sole = new THREE.Mesh(new THREE.BoxGeometry(0.072, 0.022, 0.155), sneakerSoleMat);
+    sole.position.set(0, 0.011, 0.025);
+    sole.castShadow = true;
+    legSub.add(sole);
+
+    legsGroup.add(legSub);
+  });
+
+  return legsGroup;
+}
+
+// ─── СТАБИЛЬНОЕ ПРОЦЕДУРНОЕ ПОЗИЦИОНИРОВАНИЕ РУК ДЛЯ ВСЕХ КОМНАТ (~25°) ────────
+function applyProceduralArmPose(mesh, liftRight = 0) {
+  if (!mesh || !mesh.geometry?.userData?.armIndices || !mesh.geometry?.userData?.origPos) return;
+  const pos = mesh.geometry.attributes.position;
+  const orig = mesh.geometry.userData.origPos;
+  const armIndices = mesh.geometry.userData.armIndices;
+
+  // Стабильный анатомический угол опускания рук (~15°, 0.26 rad) для всех комнат без врезания в куртку
+  const angle = 0.26;
+
+  for (let k = 0; k < armIndices.length; k++) {
+    const i = armIndices[k];
+    const ox = orig[i * 3];
+    const oy = orig[i * 3 + 1];
+    const oz = orig[i * 3 + 2];
+
+    if (ox > 0.12) {
+      // Левая рука: плавно опущена вдоль туловища под углом ~25°
+      const dx = ox - 0.14;
+      const dy = oy - 0.68;
+      const dist = Math.hypot(dx, dy);
+      const w = Math.min(1.0, Math.max(0.0, (dist - 0.02) / 0.08));
+
+      const rx = dx * Math.cos(-angle * w) - dy * Math.sin(-angle * w);
+      const ry = dx * Math.sin(-angle * w) + dy * Math.cos(-angle * w);
+      pos.array[i * 3]     = 0.14 + rx;
+      pos.array[i * 3 + 1] = 0.68 + ry;
+      pos.array[i * 3 + 2] = oz + (dist > 0.15 ? 0.015 : 0.0);
+    } else if (ox < -0.12) {
+      // Правая рука
+      const dx = ox - (-0.14);
+      const dy = oy - 0.68;
+      const dist = Math.hypot(dx, dy);
+      const w = Math.min(1.0, Math.max(0.0, (dist - 0.02) / 0.08));
+
+      if (liftRight > 0.01) {
+        // Подъем предплечья при кормлении
+        const liftW = Math.min(1.0, Math.max(0.0, (dist - 0.04) / 0.14)) * liftRight;
+        pos.array[i * 3]     = THREE.MathUtils.lerp(ox, -0.06, liftW * 0.75);
+        pos.array[i * 3 + 1] = THREE.MathUtils.lerp(oy, 0.74, liftW * 0.85);
+        pos.array[i * 3 + 2] = THREE.MathUtils.lerp(oz, 0.16, liftW * 0.90);
+      } else {
+        const rx = dx * Math.cos(angle * w) - dy * Math.sin(angle * w);
+        const ry = dx * Math.sin(angle * w) + dy * Math.cos(angle * w);
+        pos.array[i * 3]     = -0.14 + rx;
+        pos.array[i * 3 + 1] = 0.68 + ry;
+        pos.array[i * 3 + 2] = oz + (dist > 0.15 ? 0.015 : 0.0);
+      }
+    }
+  }
+
+  pos.needsUpdate = true;
+}
+
+// ─── ЗАГРУЗКА GIRL.GLB + СОХРАНЕНИЕ ОРИГИНАЛЬНЫХ МАТЕРИАЛОВ И АНИМАЦИИ ───────
+function loadCharacterModel() {
+  const loader = new THREE.GLTFLoader();
+  const bar = $('load-bar');
+  const txt = $('load-text');
+
+  loader.load(
+    'static/models/girl.glb?v=' + Date.now(),
+    (gltf) => {
+      charGroup = new THREE.Group();
+      const model = gltf.scene;
+
+      // Если в файле есть анимации покоя (Idle/Breathing) - подключаем THREE.AnimationMixer
+      if (gltf.animations && gltf.animations.length > 0) {
+        mixer = new THREE.AnimationMixer(model);
+        const action = mixer.clipAction(gltf.animations[0]);
+        action.play();
+      }
+
+      // ОБХОД МЕШЕЙ: ИСПОЛЬЗУЕМ ОРИГИНАЛЬНЫЕ МАТЕРИАЛЫ ИЗ GLB, ЛИШЬ ВЫКЛЮЧАЕМ FLATSHADING
+      model.traverse((child) => {
+        if (child.isMesh) {
+          characterMesh = child;
+          if (child.isSkinnedMesh) {
+            console.log('✅ Успешно загружен SkinnedMesh:', child.name, '| Костей в скелете:', child.skeleton?.bones?.length);
+          }
+          child.castShadow = true;
+          child.receiveShadow = false;
+
+          if (child.isMesh && child.material) {
+            const mats = Array.isArray(child.material) ? child.material : [child.material];
+            mats.forEach((mat) => {
+              if (mat) {
+                mat.roughness = 0.6;
+                mat.metalness = 0.0;
+                mat.flatShading = false;
+                if (mat.map) mat.map.colorSpace = THREE.SRGBColorSpace;
+                mat.needsUpdate = true;
+              }
+            });
+          }
+
+          // Поиск морфов рта
+          if (child.morphTargetDictionary) {
+            const dict = child.morphTargetDictionary;
+            const mouthKeys = ['mouthOpen', 'jawOpen', 'viseme_aa', 'mouth_open', 'v_aa', 'openMouth', 'mouth'];
+            for (const k of mouthKeys) {
+              if (dict[k] !== undefined) { morphMouthIndex = dict[k]; break; }
+            }
+          }
+
+          // Процедурный морф моргания верхних век и процедурный морф открытия рта
+          if (child.isSkinnedMesh) {
+            window.characterMesh = child;
+            const pos = child.geometry.attributes.position;
+            const deltaEye = new Float32Array(pos.count * 3);
+            const deltaMouth = new Float32Array(pos.count * 3);
+
+            for (let i = 0; i < pos.count; i++) {
+              const ox = pos.array[i * 3];
+              const oy = pos.array[i * 3 + 1];
+              const oz = pos.array[i * 3 + 2];
+              const absX = Math.abs(ox);
+
+              // 1. Моргание век
+              if (oy >= 0.840 && oy <= 0.875 && absX >= 0.025 && absX <= 0.075 && oz > 0.082) {
+                const weight = Math.sin(((oy - 0.840) / 0.035) * Math.PI);
+                deltaEye[i * 3 + 1] = -0.016 * Math.max(0.2, weight);
+              }
+
+              // 2. Открытие рта / челюсти
+              if (absX <= 0.045 && oz >= 0.072) {
+                if (oy >= 0.745 && oy <= 0.785) {
+                  const weight = Math.cos((absX / 0.045) * (Math.PI / 2)) * Math.sin(((oy - 0.745) / 0.040) * Math.PI);
+                  deltaMouth[i * 3 + 1] = -0.024 * Math.max(0.1, weight); // опускание нижней губы/подбородка
+                  deltaMouth[i * 3 + 2] = -0.006 * Math.max(0.1, weight);
+                } else if (oy > 0.785 && oy <= 0.805) {
+                  const weight = Math.cos((absX / 0.045) * (Math.PI / 2)) * Math.sin(((oy - 0.785) / 0.020) * Math.PI);
+                  deltaMouth[i * 3 + 1] = 0.008 * Math.max(0.1, weight);  // подъем верхней губы
+                }
+              }
+            }
+
+            child.geometry.morphAttributes = child.geometry.morphAttributes || {};
+            child.geometry.morphAttributes.position = [
+              new THREE.BufferAttribute(deltaEye, 3),
+              new THREE.BufferAttribute(deltaMouth, 3)
+            ];
+            child.morphTargetInfluences = [0.0, 0.0];
+            child.updateMorphTargets();
+            morphEyeBlinkIndex = 0;
+            morphMouthIndex = 1;
+
+            // Сохранение оригинальных координат вершин рук
+            child.geometry.userData.origPos = Float32Array.from(pos.array);
+            const armIndices = [];
+            for (let i = 0; i < pos.count; i++) {
+              const ox = pos.array[i * 3];
+              const oy = pos.array[i * 3 + 1];
+              if (oy < 0.72 && oy > 0.30 && Math.abs(ox) > 0.12) {
+                armIndices.push(i);
+              }
+            }
+            child.geometry.userData.armIndices = new Int32Array(armIndices);
+          }
+        }
+        if (child.isBone) {
+          const name = child.name.toLowerCase();
+          if (name.includes('leftarm') || name === 'mixamorig:leftarm') bones.leftArm = child;
+          else if (name.includes('rightarm') || name === 'mixamorig:rightarm') bones.rightArm = child;
+          else if (name.includes('leftforearm') || name === 'mixamorig:leftforearm') bones.leftForeArm = child;
+          else if (name.includes('rightforearm') || name === 'mixamorig:rightforearm') bones.rightForeArm = child;
+          else if (name.includes('leftshoulder') || name === 'mixamorig:leftshoulder') bones.leftShoulder = child;
+          else if (name.includes('rightshoulder') || name === 'mixamorig:rightshoulder') bones.rightShoulder = child;
+          else if (name.includes('lefthand') && !name.includes('thumb') && !name.includes('index') && !name.includes('middle') && !name.includes('ring') && !name.includes('pinky')) bones.leftHand = child;
+          else if (name.includes('righthand') && !name.includes('thumb') && !name.includes('index') && !name.includes('middle') && !name.includes('ring') && !name.includes('pinky')) bones.rightHand = child;
+          else if (name.includes('head') && !name.includes('top')) bones.head = child;
+          else if (name.includes('neck')) bones.neck = child;
+          else if (name.includes('spine')) bones.spine = child;
+          else if (name.includes('hips')) bones.hips = child;
+          else if (name.includes('leftupleg')) bones.leftUpLeg = child;
+          else if (name.includes('rightupleg')) bones.rightUpLeg = child;
+          else if (name.includes('leftleg')) bones.leftLeg = child;
+          else if (name.includes('rightleg')) bones.rightLeg = child;
+          else if (name.includes('jaw') || name.includes('mouth') || name.includes('chin')) bones.jaw = child;
+        }
+      });
+
+      // Алиасы для прямого доступа к костям Mixamo
+      bones.mixamorigLeftArm = bones.leftArm;
+      bones.mixamorigRightArm = bones.rightArm;
+      bones.mixamorigLeftForeArm = bones.leftForeArm;
+      bones.mixamorigRightForeArm = bones.rightForeArm;
+      window.bones = bones;
+
+      for (let k in bones) {
+        if (bones[k]) initialBoneRots[k] = bones[k].rotation.clone();
+      }
+
+      // Центрирование модели
+      const box = new THREE.Box3().setFromObject(model);
+      const size = box.getSize(new THREE.Vector3());
+      const center = box.getCenter(new THREE.Vector3());
+      const scaleFactor = 1.0 / Math.max(size.y, 0.001);
+
+      model.scale.setScalar(scaleFactor);
+      model.position.set(-center.x * scaleFactor, 0.44, -center.z * scaleFactor);
+
+      // Добавляем стильные ножки, мини-юбку и кроссовки
+      characterLegs = buildCharacterLegs();
+      charGroup.add(characterLegs);
+      window.characterLegs = characterLegs;
+
+      charGroup.add(model);
+      charGroup.scale.setScalar(baseScale);
+      charGroup.position.set(0, 0.04, 0);
+      scene.add(charGroup);
+      window.charGroup = charGroup;
+
+      // Применяем начальную естественную позу для гостиной
+      applyRoomPose('living');
+
+      if (bar) bar.style.width = '100%';
+      setTimeout(() => {
+        const scr = $('loading');
+        if (scr) {
+          scr.style.opacity = '0';
+          setTimeout(() => scr.style.display = 'none', 500);
+        }
+      }, 300);
+
+      setTimeout(triggerSquashAndStretch, 600);
+    },
+    (xhr) => {
+      if (xhr.lengthComputable && bar) {
+        bar.style.width = `${Math.round((xhr.loaded / xhr.total) * 100)}%`;
+      }
+    },
+    (err) => {
+      console.error('Ошибка загрузки girl.glb:', err);
+      if (txt) txt.innerText = 'Ошибка загрузки 3D-модели.';
+    }
+  );
+}
+
+// ─── 3. АНАТОМИЯ И ПОЗЫ МОДЕЛИ ПО КОМНАТАМ (ПЛАВНАЯ ИНТЕРПОЛЯЦИЯ GSAP 0.7s) ───
+function applyRoomPose(roomName) {
+  if (!charGroup) return;
+
+  if (roomName === 'kitchen') {
+    // Кухня: сидит на обеденном стуле за столом, ножки и юбка спрятаны за столешницей, стабильная естественная поза рук
+    if (characterLegs) characterLegs.visible = false;
+    gsap.to(charGroup.rotation, { x: 0, y: 0, z: 0, duration: 0.7, ease: 'power2.out' });
+    gsap.to(charGroup.position, { x: 14.0, y: -0.06, z: 0.18, duration: 0.7, ease: 'power2.out' });
+  } else if (roomName === 'bedroom') {
+    if (characterLegs) characterLegs.visible = true;
+    if (petState.isSleeping) {
+      // Спальня (СОН): лежит на матрасе кровати (y = 0.58, z = -0.45), голова на подушке
+      gsap.to(charGroup.rotation, { x: -Math.PI / 2, y: 0, z: 0, duration: 0.7, ease: 'power2.out' });
+      gsap.to(charGroup.position, { x: 42, y: 0.58, z: -0.45, duration: 0.7, ease: 'power2.out' });
+      if (characterMesh && characterMesh.morphTargetInfluences && morphEyeBlinkIndex !== -1) {
+        characterMesh.morphTargetInfluences[morphEyeBlinkIndex] = 1.0;
+      }
+    } else {
+      // Спальня при свете: стоит на прикроватном коврике (y = 0.04, z = 0.60)
+      gsap.to(charGroup.rotation, { x: 0, y: 0, z: 0, duration: 0.7, ease: 'power2.out' });
+      gsap.to(charGroup.position, { x: 42, y: 0.04, z: 0.60, duration: 0.7, ease: 'power2.out' });
+      if (characterMesh && characterMesh.morphTargetInfluences && morphEyeBlinkIndex !== -1) {
+        characterMesh.morphTargetInfluences[morphEyeBlinkIndex] = 0;
+      }
+    }
+  } else if (roomName === 'bathroom') {
+    // Ванная: стоит в душевой кабине в полный рост (y = 0.08, z = 0)
+    if (characterLegs) characterLegs.visible = true;
+    gsap.to(charGroup.rotation, { x: 0, y: 0, z: 0, duration: 0.7, ease: 'power2.out' });
+    gsap.to(charGroup.position, { x: 28, y: 0.08, z: 0, duration: 0.7, ease: 'power2.out' });
+  } else {
+    // Гостиная: стоит в центре ковра (y = 0.04, z = 0), естественная поза со свободно опущенными руками
+    if (characterLegs) characterLegs.visible = true;
+    gsap.to(charGroup.rotation, { x: 0, y: 0, z: 0, duration: 0.7, ease: 'power2.out' });
+    gsap.to(charGroup.position, { x: 0, y: 0.04, z: 0, duration: 0.7, ease: 'power2.out' });
+  }
+}
+
+// ─── 4. ПЕРЕКЛЮЧЕНИЕ 4 КОМНАТ С ПЛАВНЫМ ПЕРЕЛЕТОМ КАМЕРЫ GSAP ────────────────
+function switchRoom(roomName) {
+  if (currentRoom === roomName) return;
+  currentRoom = roomName;
+  safeHaptic('light');
+
+  const cfg = ROOM_CONFIGS[roomName];
+  if (!cfg) return;
+
+  // Переключение вкладок нижней навигации
+  document.querySelectorAll('.room-tab').forEach(tab => {
+    tab.classList.toggle('tab-active', tab.dataset.room === roomName);
+  });
+
+  // Переключение полок действий
+  const shelves = {
+    living:   $('shelf-living'),
+    kitchen:  $('shelf-kitchen'),
+    bathroom: $('shelf-bathroom'),
+    bedroom:  $('shelf-bedroom')
+  };
+  Object.keys(shelves).forEach(k => {
+    if (shelves[k]) shelves[k].classList.toggle('hidden', k !== roomName);
+  });
+
+  // Сброс инструментов ванной если вышли из ванной
+  if (roomName !== 'bathroom') {
+    deactivateBathroomTools();
+    $('foam-hud')?.classList.add('hidden');
+  } else if (foamBubbles.length > 0) {
+    $('foam-hud')?.classList.remove('hidden');
+  }
+
+  // Подсказка лампы в спальне
+  $('lamp-hint')?.classList.toggle('hidden', roomName !== 'bedroom');
+
+  // Плавный кинематографичный перелет камеры GSAP
+  const targetCamPos = (roomName === 'bedroom' && petState.isSleeping)
+    ? { x: 42.0, y: 1.35, z: 1.55 }
+    : cfg.camPos;
+  const targetLookAt = (roomName === 'bedroom' && petState.isSleeping)
+    ? { x: 42.0, y: 0.68, z: -0.40 }
+    : cfg.lookAt;
+
+  gsap.to(camera.position, {
+    x: targetCamPos.x, y: targetCamPos.y, z: targetCamPos.z,
+    duration: 0.95, ease: 'power2.inOut'
+  });
+  gsap.to(cameraLookTarget, {
+    x: targetLookAt.x, y: targetLookAt.y, z: targetLookAt.z,
+    duration: 0.95, ease: 'power2.inOut'
+  });
+
+  if (mainDirLight) {
+    gsap.to(mainDirLight.position, { x: cfg.xOffset + 2, y: 6, z: 4, duration: 0.95, ease: 'power2.inOut' });
+    gsap.to(mainDirLight.target.position, { x: cfg.xOffset, y: 1.0, z: 0, duration: 0.95, ease: 'power2.inOut' });
+  }
+
+  // Персонаж перемещается в соответствующую комнату
+  if (charGroup) {
+    const targetY = (roomName === 'bedroom' && petState.isSleeping) ? 0.58 : cfg.charPos.y;
+    const targetZ = (roomName === 'bedroom' && petState.isSleeping) ? -0.45 : cfg.charPos.z;
+    gsap.to(charGroup.position, {
+      x: cfg.charPos.x,
+      y: targetY,
+      z: targetZ,
+      duration: 0.85, ease: 'power2.inOut',
+      onComplete: () => applyRoomPose(roomName)
+    });
+  }
+
+  updateSpeech();
+}
+
+document.querySelectorAll('.room-tab').forEach(tab => {
+  tab.addEventListener('click', () => switchRoom(tab.dataset.room));
+});
+
+// ─── 5. МЕХАНИКА ВАННОЙ: 3D-ПЕНА И ДУШ ────────────────────────────────────────
+function activateTool(toolType) {
+  safeHaptic('medium');
+  const spongeBtn = $('tool-sponge');
+  const showerBtn = $('tool-shower');
+  const cursor = $('active-tool-cursor');
+
+  if (activeBathroomTool === toolType) {
+    deactivateBathroomTools();
+    return;
+  }
+
+  activeBathroomTool = toolType;
+
+  if (toolType === 'sponge') {
+    spongeBtn?.classList.add('ring-4', 'ring-cyan-400');
+    showerBtn?.classList.remove('ring-4', 'ring-blue-400');
+    if (cursor) {
+      cursor.innerText = '🧽';
+      cursor.classList.remove('hidden');
+    }
+    updateSpeech('Води губкой по мне, намыливай! 🫧');
+  } else if (toolType === 'shower') {
+    showerBtn?.classList.add('ring-4', 'ring-blue-400');
+    spongeBtn?.classList.remove('ring-4', 'ring-cyan-400');
+    if (cursor) {
+      cursor.innerText = '🚿';
+      cursor.classList.remove('hidden');
+    }
+    updateSpeech('Веди душ над пеной, чтобы смыть её! 🚿✨');
+  }
+}
+
+function deactivateBathroomTools() {
+  activeBathroomTool = null;
+  $('tool-sponge')?.classList.remove('ring-4', 'ring-cyan-400');
+  $('tool-shower')?.classList.remove('ring-4', 'ring-blue-400');
+  $('active-tool-cursor')?.classList.add('hidden');
+}
+
+$('tool-sponge')?.addEventListener('click', () => activateTool('sponge'));
+$('tool-shower')?.addEventListener('click', () => activateTool('shower'));
+
+// Спавн непрерывных групп мелкой и средней полупрозрачной пены (плотная пышная шапка)
+let lastFoamTime = 0;
+function spawnFoamCluster(point) {
+  if (!charGroup || foamBubbles.length >= 160) return;
+  playSfx('soap');
+  safeHaptic('light');
+
+  const count = 7 + Math.floor(Math.random() * 5); // 7-11 пузырьков в группе
+  for (let i = 0; i < count; i++) {
+    if (foamBubbles.length >= 160) break;
+    const radius = 0.022 + Math.random() * 0.033; // 0.022 - 0.055
+    const geo = new THREE.SphereGeometry(radius, 12, 12);
+    const bubble = new THREE.Mesh(geo, foamMaterial);
+
+    const jx = (Math.random() - 0.5) * 0.08;
+    const jy = (Math.random() - 0.5) * 0.08;
+    const jz = (Math.random() - 0.5) * 0.06;
+
+    // Привязываем пену локально к телу персонажа
+    const localPos = charGroup.worldToLocal(point.clone()).add(new THREE.Vector3(jx, jy, jz));
+    bubble.position.copy(localPos);
+    bubble.scale.set(0, 0, 0);
+
+    charGroup.add(bubble);
+    foamBubbles.push(bubble);
+
+    gsap.to(bubble.scale, {
+      x: 1, y: 1, z: 1,
+      duration: 0.22,
+      ease: 'back.out(2)'
+    });
+  }
+
+  $('foam-hud')?.classList.remove('hidden');
+  $('foam-count-txt').innerText = foamBubbles.length;
+}
+
+// Система частиц падающих струй воды для душа
+function initWaterDropParticles(parent) {
+  const count = 90;
+  const geo = new THREE.BufferGeometry();
+  const pos = new Float32Array(count * 3);
+
+  waterDropsData = [];
+  for (let i = 0; i < count; i++) {
+    const x = 0.78 + (Math.random() - 0.5) * 0.40;
+    const y = 2.4 + Math.random() * 0.2;
+    const z = -1.45 + (Math.random() - 0.5) * 0.40;
+    pos[i * 3]     = x;
+    pos[i * 3 + 1] = y;
+    pos[i * 3 + 2] = z;
+    waterDropsData.push({ x, y, z, speed: 0.08 + Math.random() * 0.05 });
+  }
+
+  geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  const mat = new THREE.PointsMaterial({
+    color: 0x93c5fd, size: 0.045, transparent: true, opacity: 0.8
+  });
+  waterParticlesMesh = new THREE.Points(geo, mat);
+  waterParticlesMesh.visible = false;
+  parent.add(waterParticlesMesh);
+}
+
+// Смывание пены душем: быстро и легко смывает группы пузырьков струями воды
+function rinseFoamUnderShower() {
+  if (foamBubbles.length === 0) return;
+  playSfx('shower');
+  safeHaptic('light');
+
+  const removeCount = Math.min(8, foamBubbles.length);
+  for (let i = 0; i < removeCount; i++) {
+    const b = foamBubbles.pop();
+    if (!b) continue;
+    gsap.to(b.scale, {
+      x: 0, y: 0, z: 0,
+      duration: 0.20,
+      ease: 'power1.in',
+      onComplete: () => {
+        if (b.parent) b.parent.remove(b);
+        b.geometry.dispose();
+      }
+    });
+  }
+
+  // При каждом смыве порции пены шкала чистоты растет в реальном времени
+  petState.hygiene = Math.min(100, petState.hygiene + 3);
+  saveState();
+  updateHUD();
+
+  $('foam-count-txt').innerText = foamBubbles.length;
+
+  if (foamBubbles.length === 0) {
+    completeShowerWash();
+  }
+}
+
+function completeShowerWash() {
+  deactivateBathroomTools();
+  $('foam-hud')?.classList.add('hidden');
+  playSfx('fanfare');
+  playVoiceClip('sigh');
+  safeHaptic('success');
+
+  petState.hygiene = 100;
+  petState.coins += 5;
+  saveState();
+  updateHUD();
+
+  updateSpeech('Ах, какая свежесть! Я сияю чистотой! 🧼✨');
+  confetti({ particleCount: 80, spread: 60, origin: { y: 0.6 } });
+
+  // Персонаж радостно отряхивается
+  if (charGroup) {
+    gsap.to(charGroup.rotation, {
+      y: 0.35, duration: 0.08, yoyo: true, repeat: 5, ease: 'power1.inOut',
+      onComplete: () => { charGroup.rotation.y = 0; }
+    });
+  }
+}
+
+// ─── 6. МЕХАНИКА КУХНИ: ПЕРЕТАСКИВАНИЕ ЕДЫ (DRAG AND DROP) КО РТУ ─────────────
+let isDraggingFood = false;
+let draggedFood = null;
+let dragElem = null;
+
+function getMouthScreenPos() {
+  let mouthX = window.innerWidth * 0.5;
+  let mouthY = window.innerHeight * 0.46;
+  if (charGroup && camera) {
+    // Точные мировые координаты губ персонажа:
+    // На кухне персонаж сидит за столом (y = -0.06), точная высота линии губ: y + 0.78
+    const mouthYOffset = (currentRoom === 'kitchen') ? 0.78 : 0.88;
+    const mouthZOffset = (currentRoom === 'kitchen') ? 0.16 : 0.10;
+    const targetVec = new THREE.Vector3(
+      charGroup.position.x,
+      charGroup.position.y + mouthYOffset,
+      charGroup.position.z + mouthZOffset
+    );
+    targetVec.project(camera);
+    mouthX = (targetVec.x * 0.5 + 0.5) * window.innerWidth;
+    mouthY = (-(targetVec.y * 0.5) + 0.5) * window.innerHeight;
+  }
+  return { x: mouthX, y: mouthY };
+}
+
+function setupFoodDrag() {
+  document.querySelectorAll('.btn-food').forEach(btn => {
+    btn.addEventListener('pointerdown', (e) => {
+      if (currentRoom !== 'kitchen') return;
+      const food = btn.dataset.food;
+      const gain = parseFloat(btn.dataset.gain) || 25;
+      const emoji = btn.dataset.emoji || '🍕';
+
+      if (petState.hunger >= 100 && food !== 'coffee') {
+        safeHaptic('warning');
+        updateSpeech('Я наелась, больше не влезает! 😋');
+        return;
+      }
+
+      isDraggingFood = true;
+      draggedFood = { food, gain, emoji, btn };
+
+      dragElem = document.createElement('div');
+      dragElem.className = 'dragged-food-item';
+      dragElem.innerText = emoji;
+      dragElem.style.left = `${e.clientX}px`;
+      dragElem.style.top  = `${e.clientY}px`;
+      dragElem.style.fontSize = '2.8rem';
+      document.body.appendChild(dragElem);
+
+      safeHaptic('light');
+      btn.style.opacity = '0.4';
+
+      // Рот приоткрывается в ожидании угощения
+      if (bones.jaw) gsap.to(bones.jaw.rotation, { x: 0.18, duration: 0.2 });
+    });
+
+    // Резервный клик: мгновенный полет ко рту если не перетаскивали
+    btn.addEventListener('click', (e) => {
+      if (isDraggingFood) return;
+      const food = btn.dataset.food;
+      const gain = parseFloat(btn.dataset.gain) || 25;
+      const emoji = btn.dataset.emoji || '🍕';
+
+      if (petState.hunger >= 100 && food !== 'coffee') {
+        safeHaptic('warning');
+        updateSpeech('Я наелась, больше не влезает! 😋');
+        return;
+      }
+
+      executeFeed(food, gain, emoji, e.clientX, e.clientY);
+    });
+  });
+
+  window.addEventListener('pointermove', (e) => {
+    if (!isDraggingFood || !dragElem) return;
+    dragElem.style.left = `${e.clientX}px`;
+    dragElem.style.top  = `${e.clientY}px`;
+
+    const mouth = getMouthScreenPos();
+    const dist = Math.hypot(e.clientX - mouth.x, e.clientY - mouth.y);
+    // 1. При перетаскивании еды: как только курсор ближе 140px к лицу персонажа, рот приоткрывается
+    if (dist < 140) {
+      const openProgress = Math.min(1.0, Math.max(0.0, (140 - dist) / 90));
+      dragElem.style.transform = `translate(-50%, -50%) scale(${1.0 + openProgress * 0.25})`;
+      if (bones.jaw) bones.jaw.rotation.x = THREE.MathUtils.lerp(0.0, 0.40, openProgress);
+      if (characterMesh && characterMesh.morphTargetInfluences && morphMouthIndex !== -1) {
+        characterMesh.morphTargetInfluences[morphMouthIndex] = THREE.MathUtils.lerp(0.0, 0.90, openProgress);
+      }
+    } else {
+      dragElem.style.transform = 'translate(-50%, -50%) scale(1.0)';
+      if (bones.jaw) bones.jaw.rotation.x = THREE.MathUtils.lerp(bones.jaw.rotation.x, 0, 0.2);
+      if (characterMesh && characterMesh.morphTargetInfluences && morphMouthIndex !== -1) {
+        characterMesh.morphTargetInfluences[morphMouthIndex] = THREE.MathUtils.lerp(characterMesh.morphTargetInfluences[morphMouthIndex], 0, 0.2);
+      }
+    }
+  });
+
+  const onFoodDrop = (e) => {
+    if (!isDraggingFood || !dragElem) return;
+    isDraggingFood = false;
+    if (draggedFood?.btn) draggedFood.btn.style.opacity = '1';
+
+    const mouth = getMouthScreenPos();
+    const dist = Math.hypot(e.clientX - mouth.x, e.clientY - mouth.y);
+    if (dist < 160) {
+      executeFeed(draggedFood.food, draggedFood.gain, draggedFood.emoji, e.clientX, e.clientY, dragElem);
+    } else {
+      if (bones.jaw) gsap.to(bones.jaw.rotation, { x: 0, duration: 0.2 });
+      if (characterMesh && characterMesh.morphTargetInfluences && morphMouthIndex !== -1) {
+        gsap.to(characterMesh.morphTargetInfluences, { [morphMouthIndex]: 0, duration: 0.2 });
+      }
+      gsap.to(dragElem, {
+        scale: 0.2, opacity: 0, duration: 0.22, ease: 'power2.in',
+        onComplete: () => { dragElem?.remove(); dragElem = null; }
+      });
+    }
+    draggedFood = null;
+  };
+
+  window.addEventListener('pointerup', onFoodDrop);
+  window.addEventListener('pointercancel', onFoodDrop);
+}
+
+function executeFeed(food, gain, emoji, startX, startY, existingElem = null) {
+  const mouthScreen = getMouthScreenPos();
+
+  // 1. 2D-спрайт еды сразу скрывается при отпускании
+  if (existingElem) existingElem.remove();
+  if (dragElem) { dragElem.remove(); dragElem = null; }
+
+  // 2. На уровне рта на 0.25 секунды создается маленький 3D-меш (кусочек), который плавно втягивается в рот (scale -> 0)
+  const foodColors = {
+    pizza: 0xf59e0b,
+    croissant: 0xd97706,
+    cake: 0xf472b6,
+    coffee: 0x78350f,
+    watermelon: 0xef4444
+  };
+  const color = foodColors[food] || 0xf59e0b;
+
+  const foodPieceGeo = new THREE.DodecahedronGeometry(0.038, 1);
+  const foodPieceMat = new THREE.MeshStandardMaterial({
+    color: color,
+    roughness: 0.6,
+    metalness: 0.0
+  });
+  const foodPiece = new THREE.Mesh(foodPieceGeo, foodPieceMat);
+
+  const mouthX = charGroup ? charGroup.position.x : 14.0;
+  // На кухне персонаж сидит за столом (y = -0.06), точная высота рта строго mouthTargetY = charGroup.position.y + 0.78 (строго в губы, а не в лоб!)
+  const mouthYOffset = (currentRoom === 'kitchen') ? 0.78 : 0.88;
+  const mouthTargetY = charGroup ? (charGroup.position.y + mouthYOffset) : 0.72;
+  const mouthTargetZ = charGroup ? (charGroup.position.z + 0.16) : 0.34;
+
+  // Стартовая позиция кусочка еды прямо перед сомкнутыми губами
+  foodPiece.position.set(mouthX, mouthTargetY, mouthTargetZ + 0.05);
+  foodPiece.scale.set(1, 1, 1);
+  scene.add(foodPiece);
+
+  // Втягивание строго на линии смыкания губ за 0.25 секунды с уменьшением scale -> 0
+  gsap.to(foodPiece.position, {
+    y: mouthTargetY,
+    z: mouthTargetZ - 0.08,
+    duration: 0.25,
+    ease: 'power2.in'
+  });
+
+  gsap.to(foodPiece.scale, {
+    x: 0,
+    y: 0,
+    z: 0,
+    duration: 0.25,
+    ease: 'power2.in',
+    onComplete: () => {
+      scene.remove(foodPiece);
+      foodPieceGeo.dispose();
+      foodPieceMat.dispose();
+
+      // 3. Рот закрывается, звук «ням», 3 цикла покачивания головы и челюсти
+      playVoiceClip('eat');
+      playSfx('eat');
+      safeHaptic('success');
+
+      // Закрытие рта
+      if (characterMesh && characterMesh.morphTargetInfluences && morphMouthIndex !== -1) {
+        characterMesh.morphTargetInfluences[morphMouthIndex] = 0;
+      }
+      if (bones.jaw) {
+        bones.jaw.rotation.x = 0;
+      }
+
+      // 3 цикла покачивания головы (repeat: 5 с yoyo = 3 полных колебания)
+      if (bones.head) {
+        const baseHeadX = initialBoneRots?.head?.x || 0;
+        gsap.to(bones.head.rotation, {
+          x: baseHeadX + 0.12,
+          duration: 0.14,
+          yoyo: true,
+          repeat: 5,
+          ease: 'sine.inOut',
+          onComplete: () => {
+            if (bones.head) bones.head.rotation.x = baseHeadX;
+          }
+        });
+      }
+
+      // 3 цикла движения челюсти
+      if (characterMesh && characterMesh.morphTargetInfluences && morphMouthIndex !== -1) {
+        gsap.to(characterMesh.morphTargetInfluences, {
+          [morphMouthIndex]: 0.45,
+          duration: 0.14,
+          yoyo: true,
+          repeat: 5,
+          ease: 'sine.inOut',
+          onComplete: () => {
+            if (characterMesh?.morphTargetInfluences) {
+              characterMesh.morphTargetInfluences[morphMouthIndex] = 0;
+            }
+          }
+        });
+      } else if (bones.jaw) {
+        gsap.to(bones.jaw.rotation, {
+          x: 0.22,
+          duration: 0.14,
+          yoyo: true,
+          repeat: 5,
+          ease: 'sine.inOut',
+          onComplete: () => { if (bones.jaw) bones.jaw.rotation.x = 0; }
+        });
+      }
+
+      // Начисление очков сытости
+      petState.hunger = Math.min(100, petState.hunger + gain);
+      if (food === 'coffee') petState.energy = Math.min(100, petState.energy + 12);
+      else if (food === 'watermelon') petState.hygiene = Math.min(100, petState.hygiene + 8);
+      petState.coins += 2;
+      saveState();
+      updateHUD();
+
+      spawnFloatingText(`+${gain}% 😋`, mouthScreen.x, mouthScreen.y - 30);
+      spawnHeart(mouthScreen.x, mouthScreen.y - 10);
+      updateSpeech('Ням-ням! Очень вкусно! 🍰🥰');
+
+      fetch('/api/action', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'feed' })
+      }).catch(() => {});
+    }
+  });
+}
+
+setupFoodDrag();
+
+// ─── 7. МЕХАНИКА СПАЛЬНИ: ТОРШЕР И СОН С FADE-ЗАТЕМНЕНИЕМ ────────────────────
+let sleepZInterval = null;
+
+function toggleBedroomLights() {
+  const willSleep = !petState.isSleeping;
+  petState.isSleeping = willSleep;
+  safeHaptic('medium');
+  playSfx('switch');
+  saveState();
+
+  const overlay = $('room-fade-overlay');
+
+  if (willSleep) {
+    playVoiceClip('yawn');
+    $('lamp-icon').innerText  = '☀️';
+    $('lamp-label').innerText = 'ВКЛЮЧИТЬ СВЕТ (Разбудить)';
+    updateSpeech('Сладких снов... Мне снишься ты 💤🌙');
+
+    // 1. Полноэкранное черное затемнение (fade opacity 0 -> 1 за 0.4с)
+    if (overlay) {
+      gsap.to(overlay, {
+        opacity: 1,
+        duration: 0.4,
+        ease: 'power2.inOut',
+        onComplete: () => {
+          // 2. Под затемнением положить персонажа на матрас (y = 0.58, z = -0.45, rotation x = -Math.PI / 2, глаза закрыты)
+          if (charGroup) {
+            charGroup.position.set(42, 0.58, -0.45);
+            charGroup.rotation.set(-Math.PI / 2, 0, 0);
+          }
+          if (characterMesh && characterMesh.morphTargetInfluences && morphEyeBlinkIndex !== -1) {
+            characterMesh.morphTargetInfluences[morphEyeBlinkIndex] = 1.0;
+          }
+
+          // Фокус камеры прямо на кровать
+          camera.position.set(42.0, 1.35, 1.55);
+          cameraLookTarget.set(42.0, 0.68, -0.40);
+
+          // Основной свет приглушается, включается ночник (bedroomLampLight)
+          if (ambientLight)     ambientLight.intensity = 0.10;
+          if (mainDirLight)     mainDirLight.intensity = 0.05;
+          if (bedroomLampLight) bedroomLampLight.intensity = 1.1;
+          if (bedroomShadeMesh?.material) bedroomShadeMesh.material.emissiveIntensity = 0.85;
+
+          // 3. Затемнение уходит (1 -> 0), запускаются Zzz
+          gsap.to(overlay, {
+            opacity: 0,
+            duration: 0.5,
+            delay: 0.05,
+            ease: 'power2.inOut',
+            onComplete: () => {
+              startSleepZ();
+            }
+          });
+        }
+      });
+    }
+  } else {
+    // Зеркальный fade при пробуждении
+    $('lamp-icon').innerText  = '🌙';
+    $('lamp-label').innerText = 'ВЫКЛЮЧИТЬ СВЕТ (Уложить спать)';
+    updateSpeech('Доброе утро! Я выспалась и полна сил! ☀️✨');
+    stopSleepZ();
+
+    if (overlay) {
+      gsap.to(overlay, {
+        opacity: 1,
+        duration: 0.4,
+        ease: 'power2.inOut',
+        onComplete: () => {
+          // Под затемнением: персонаж встает на коврик (y = 0.04, z = 0.60, rotation 0,0,0) без клиппинга геометрии
+          if (charGroup) {
+            charGroup.position.set(42, 0.04, 0.60);
+            charGroup.rotation.set(0, 0, 0);
+          }
+          if (characterMesh && characterMesh.morphTargetInfluences && morphEyeBlinkIndex !== -1) {
+            characterMesh.morphTargetInfluences[morphEyeBlinkIndex] = 0;
+          }
+
+          // Возврат камеры в исходное положение спальни (полный рост)
+          camera.position.set(ROOM_CONFIGS.bedroom.camPos.x, ROOM_CONFIGS.bedroom.camPos.y, ROOM_CONFIGS.bedroom.camPos.z);
+          cameraLookTarget.set(ROOM_CONFIGS.bedroom.lookAt.x, ROOM_CONFIGS.bedroom.lookAt.y, ROOM_CONFIGS.bedroom.lookAt.z);
+
+          // Дневной сбалансированный свет
+          if (ambientLight)     ambientLight.intensity = 0.65;
+          if (mainDirLight)     mainDirLight.intensity = 0.55;
+          if (bedroomLampLight) bedroomLampLight.intensity = 0.25;
+          if (bedroomShadeMesh?.material) bedroomShadeMesh.material.emissiveIntensity = 0.5;
+
+          // Затемнение уходит (1 -> 0)
+          gsap.to(overlay, {
+            opacity: 0,
+            duration: 0.5,
+            delay: 0.05,
+            ease: 'power2.inOut',
+            onComplete: () => {
+              triggerSquashAndStretch();
+            }
+          });
+        }
+      });
+    }
+  }
+}
+
+$('btn-lamp')?.addEventListener('click', toggleBedroomLights);
+
+function startSleepZ() {
+  stopSleepZ();
+  sleepZInterval = setInterval(() => {
+    if (!petState.isSleeping || !$('particles')) return;
+    const z = document.createElement('div');
+    z.className = 'sleep-z';
+    z.innerText = 'Z';
+    z.style.left = `${window.innerWidth / 2 - 40 + (Math.random() - 0.5) * 35}px`;
+    z.style.top  = `${window.innerHeight * 0.38}px`;
+    $('particles').appendChild(z);
+
+    gsap.to(z, {
+      x: 35 + Math.random() * 40,
+      y: -120 - Math.random() * 40,
+      fontSize: '36px', opacity: 0,
+      duration: 2.2, ease: 'power1.out',
+      onComplete: () => z.remove()
+    });
+  }, 1200);
+}
+
+function stopSleepZ() {
+  if (sleepZInterval) {
+    clearInterval(sleepZInterval);
+    sleepZInterval = null;
+  }
+}
+
+// ─── 8. ТАЧ И КЛИКИ (ПОГЛАЖИВАНИЕ ЩЕЧЕК, ГУБКА, ДУШ, ТОРШЕР) ───────────────────
+function setupInteractions() {
+  let isPointerDown = false;
+  let lastStrokeX = 0;
+  let lastStrokeY = 0;
+  let petStrokeDist = 0;
+  let lastStrokeTriggerTime = 0;
+
+  const onPointerDown = (e) => {
+    isPointerDown = true;
+    const t = e.touches ? e.touches[0] : e;
+    lastStrokeX = t.clientX;
+    lastStrokeY = t.clientY;
+    petStrokeDist = 0;
+  };
+
+  const onPointerMove = (e) => {
+    const t = e.touches ? e.touches[0] : e;
+    const r = wrap.getBoundingClientRect();
+    targetPointer.x =  ((t.clientX - r.left) / r.width)  * 2 - 1;
+    targetPointer.y = -(((t.clientY - r.top)  / r.height) * 2 - 1);
+
+    // Движение плавающего курсора инструмента (губка/душ)
+    const cursor = $('active-tool-cursor');
+    if (activeBathroomTool && cursor && !cursor.classList.contains('hidden')) {
+      cursor.style.left = `${t.clientX}px`;
+      cursor.style.top  = `${t.clientY}px`;
+    }
+
+    // Если активна губка в ванной: непрерывно спавним плотные группы пены при вождении по персонажу
+    if (currentRoom === 'bathroom' && activeBathroomTool === 'sponge' && charGroup) {
+      const now = Date.now();
+      if (now - lastFoamTime > 35) {
+        const mouse = new THREE.Vector2(
+          ((t.clientX - r.left) / r.width) * 2 - 1,
+          -(((t.clientY - r.top) / r.height) * 2 - 1)
+        );
+        const raycaster = new THREE.Raycaster();
+        raycaster.setFromCamera(mouse, camera);
+        const hits = raycaster.intersectObject(charGroup, true);
+
+        if (hits.length > 0) {
+          spawnFoamCluster(hits[0].point);
+          lastFoamTime = now;
+        } else {
+          const nearCenter = Math.abs(t.clientX - window.innerWidth / 2) < 140;
+          const inTorsoZone = t.clientY > window.innerHeight * 0.18 && t.clientY < window.innerHeight * 0.76;
+          if (nearCenter && inTorsoZone) {
+            const approxPoint = new THREE.Vector3(
+              charGroup.position.x + (Math.random() - 0.5) * 0.22,
+              charGroup.position.y + 0.50 + (Math.random() - 0.5) * 0.35,
+              charGroup.position.z + 0.12
+            );
+            spawnFoamCluster(approxPoint);
+            lastFoamTime = now;
+          }
+        }
+      }
+    }
+
+    // Если активен душ: включаем струи воды и смываем пену
+    if (currentRoom === 'bathroom' && activeBathroomTool === 'shower') {
+      if (waterParticlesMesh) waterParticlesMesh.visible = true;
+      rinseFoamUnderShower();
+    }
+
+    // ── МЕХАНИКА ПОГЛАЖИВАНИЯ / ЩЕКОТКИ ЩЕЧЕК И ГОЛОВЫ (TALKING TOM STYLE) ──
+    if (!activeBathroomTool && !isDraggingFood && !petState.isSleeping && charGroup) {
+      const dx = t.clientX - lastStrokeX;
+      const dy = t.clientY - lastStrokeY;
+      const dist = Math.hypot(dx, dy);
+
+      // Проверка попадания в область головы и тела персонажа (по центру экрана)
+      const nearCharCenter = Math.abs(t.clientX - window.innerWidth / 2) < (window.innerWidth * 0.28);
+      const inUpperBodyZone = t.clientY > window.innerHeight * 0.18 && t.clientY < window.innerHeight * 0.72;
+
+      if (nearCharCenter && inUpperBodyZone) {
+        // Легкий игровой наклон головы за направлением движения пальца/курсора
+        if (bones.head) {
+          const tiltFactor = Math.max(-0.25, Math.min(0.25, dx * 0.015));
+          bones.head.rotation.z = THREE.MathUtils.lerp(bones.head.rotation.z, tiltFactor, 0.2);
+        }
+
+        if (isPointerDown || e.touches) {
+          petStrokeDist += dist;
+          const now = Date.now();
+          if (petStrokeDist > 75 && (now - lastStrokeTriggerTime > 550)) {
+            lastStrokeTriggerTime = now;
+            petStrokeDist = 0;
+
+            // Воспроизводим милый смешок и щекотку
+            playVoiceClip('giggle');
+            playSfx('tap');
+            safeHaptic('light');
+
+            // Улыбка рта через Morph Target
+            if (characterMesh && characterMesh.morphTargetInfluences && morphMouthIndex !== -1) {
+              gsap.to(characterMesh.morphTargetInfluences, {
+                [morphMouthIndex]: 0.45,
+                duration: 0.18,
+                yoyo: true,
+                repeat: 1,
+                ease: 'power1.inOut'
+              });
+            }
+
+            // Игривый кивок головой
+            if (bones.head) {
+              const dir = dx >= 0 ? 0.18 : -0.18;
+              gsap.to(bones.head.rotation, {
+                z: dir,
+                duration: 0.22,
+                yoyo: true,
+                repeat: 1,
+                ease: 'power2.out'
+              });
+            }
+
+            // Вылетающие сердечки прямо из точки поглаживания
+            spawnHeart(t.clientX, t.clientY);
+
+            // Пополнение шкалы веселья
+            petState.fun = Math.min(100, petState.fun + 4);
+            petState.coins += 1;
+            saveState();
+            updateHUD();
+            updateSpeech('М-м-м, щекотно и приятно! 🥰💖');
+          }
+        }
+      }
+      lastStrokeX = t.clientX;
+      lastStrokeY = t.clientY;
+    }
+  };
+
+  window.addEventListener('mousedown', onPointerDown);
+  window.addEventListener('touchstart', onPointerDown, { passive: true });
+  window.addEventListener('mousemove', onPointerMove);
+  window.addEventListener('touchmove', onPointerMove, { passive: true });
+
+  const onPointerUp = () => {
+    isPointerDown = false;
+    petStrokeDist = 0;
+    if (waterParticlesMesh) waterParticlesMesh.visible = false;
+    if (bones.head && !petState.isSleeping) {
+      gsap.to(bones.head.rotation, { z: 0, duration: 0.35, ease: 'power2.out' });
+    }
+  };
+  window.addEventListener('mouseup', onPointerUp);
+  window.addEventListener('touchend', onPointerUp);
+
+  wrap.addEventListener('click', (e) => {
+    if (activeBathroomTool) return;
+
+    // Raycast: клик по лампе/тумбочке в спальне
+    const mouse = new THREE.Vector2(
+      (e.clientX / window.innerWidth) * 2 - 1,
+      -(e.clientY / window.innerHeight) * 2 + 1
+    );
+    const raycaster = new THREE.Raycaster();
+    raycaster.setFromCamera(mouse, camera);
+    const intersects = raycaster.intersectObjects(scene.children, true);
+    for (let hit of intersects) {
+      if (hit.object.userData?.isLamp) {
+        toggleBedroomLights();
+        return;
+      }
+    }
+
+    // Клик/тап по персонажу: щекотка и поглаживание щечек
+    triggerSquashAndStretch();
+  });
+
+  // Кнопка «Пощекотать» в Гостиной
+  $('btn-tickle')?.addEventListener('click', () => {
+    if (petState.isSleeping) {
+      updateSpeech('Она сладко спит... zZz 😴');
+      return;
+    }
+    safeHaptic('medium');
+    playSfx('tap');
+    playVoiceClip('giggle');
+
+    if (bones.head) {
+      gsap.to(bones.head.rotation, {
+        z: 0.22,
+        duration: 0.16,
+        yoyo: true,
+        repeat: 3,
+        ease: 'power1.inOut',
+        onComplete: () => { if (bones.head) bones.head.rotation.z = 0; }
+      });
+    }
+
+    if (charGroup) {
+      gsap.killTweensOf(charGroup.scale);
+      gsap.to(charGroup.scale, {
+        x: baseScale * 1.14, y: baseScale * 0.86, z: baseScale * 1.14,
+        duration: 0.15, ease: 'power2.out',
+        onComplete: () => {
+          gsap.to(charGroup.scale, {
+            x: baseScale, y: baseScale, z: baseScale,
+            duration: 0.55, ease: 'elastic.out(1.2, 0.3)'
+          });
+        }
+      });
+    }
+
+    // Салют из сердечек
+    for (let i = 0; i < 4; i++) {
+      setTimeout(() => {
+        spawnHeart(
+          window.innerWidth / 2 + (Math.random() - 0.5) * 100,
+          window.innerHeight * 0.40 + (Math.random() - 0.5) * 80
+        );
+      }, i * 90);
+    }
+
+    petState.fun = Math.min(100, petState.fun + 15);
+    petState.coins += 2;
+    saveState();
+    updateHUD();
+    updateSpeech('Хи-хи-хи! Хватит щекотать, щекотно же! 😆💖');
+  });
+}
+
+function triggerSquashAndStretch() {
+  if (!charGroup) return;
+  safeHaptic('medium');
+  playSfx('tap');
+  playVoiceClip('giggle');
+
+  gsap.killTweensOf(charGroup.scale);
+  gsap.to(charGroup.scale, {
+    x: baseScale * 1.15, y: baseScale * 0.85, z: baseScale * 1.15,
+    duration: 0.15, ease: 'power2.out',
+    onComplete: () => {
+      gsap.to(charGroup.scale, {
+        x: baseScale, y: baseScale, z: baseScale,
+        duration: 0.55, ease: 'elastic.out(1.2, 0.3)'
+      });
+    }
+  });
+  spawnHeart(window.innerWidth / 2, window.innerHeight * 0.42);
+
+  petState.fun = Math.min(100, petState.fun + 3);
+  saveState();
+  updateHUD();
+}
+
+// ─── 9. МОРГАНИЕ И ЦИКЛ РЕНДЕРА (IDLE ДЫХАНИЕ, LIP-SYNC LERP, NO HEAD SCALE) ─
+function triggerBlink() {
+  if (isBlinking || petState.isSleeping) return;
+  isBlinking = true;
+
+  if (characterMesh && characterMesh.morphTargetInfluences && morphEyeBlinkIndex !== -1) {
+    gsap.to(characterMesh.morphTargetInfluences, {
+      [morphEyeBlinkIndex]: 1.0,
+      duration: 0.075,
+      yoyo: true,
+      repeat: 1,
+      ease: 'power1.inOut',
+      onComplete: () => {
+        isBlinking = false;
+        scheduleNextBlink();
+      }
+    });
+  } else if (bones.head) {
+    // Безопасный естественный наклон головы без скейлинга
+    const origX = bones.head.rotation.x;
+    gsap.to(bones.head.rotation, {
+      x: origX + 0.025,
+      duration: 0.08,
+      yoyo: true,
+      repeat: 1,
+      ease: 'power1.inOut',
+      onComplete: () => {
+        if (bones.head) bones.head.scale.set(1, 1, 1);
+        isBlinking = false;
+        scheduleNextBlink();
+      }
+    });
+  } else {
+    isBlinking = false;
+    scheduleNextBlink();
+  }
+}
+
+function scheduleNextBlink() {
+  if (nextBlinkTimer) clearTimeout(nextBlinkTimer);
+  const delay = 3000 + Math.random() * 2500; // каждые 3-5.5 секунд
+  nextBlinkTimer = setTimeout(() => {
+    if (!petState.isSleeping) triggerBlink();
+  }, delay);
+}
+scheduleNextBlink();
+
+// ─── ПРИНУДИТЕЛЬНАЯ СИНХРОНИЗАЦИЯ ПОЗЫ РУК (БЕЗ A-POSE, ~25°) ───────────────
+function applyArmPose() {
+  if (characterMesh) {
+    applyProceduralArmPose(characterMesh, armLiftAmount);
+  }
+}
+
+function animate() {
+  requestAnimationFrame(animate);
+  if (!scene || !renderer) return;
+
+  // Юбка и ноги строго скрыты на кухне (так как сидит за глухой столешницей)
+  if (characterLegs) {
+    characterLegs.visible = (currentRoom !== 'kitchen');
+  }
+
+  const delta = clock.getDelta();
+  const time = clock.getElapsedTime();
+  if (mixer) mixer.update(delta);
+
+  // Плавный Look-At камеры
+  camera.lookAt(cameraLookTarget.x, cameraLookTarget.y, cameraLookTarget.z);
+
+  // Сглаживание движения курсора
+  pointer.x = THREE.MathUtils.lerp(pointer.x, targetPointer.x, 0.08);
+  pointer.y = THREE.MathUtils.lerp(pointer.y, targetPointer.y, 0.08);
+
+  // ── Lip-Sync с Audio Smoothing, Noise Gate и Two-Phase LERP ──
+  let targetVolume = 0;
+  if (isSpeaking) {
+    if (currentVoiceAudio && voiceVolumeCurve) {
+      // Прямой расчет из огибающей аудиодорожки (аппаратно синхронизировано, 0 аллокаций памяти)
+      const idx = Math.floor(currentVoiceAudio.currentTime / 0.04);
+      if (idx >= 0 && idx < voiceVolumeCurve.length) {
+        targetVolume = voiceVolumeCurve[idx];
+      }
+    } else if (playbackAnalyser) {
+      // Fallback на AnalyserNode БЕЗ повторного создания Uint8Array в каждом кадре
+      if (!lipSyncFreqData || lipSyncFreqData.length !== playbackAnalyser.frequencyBinCount) {
+        lipSyncFreqData = new Uint8Array(playbackAnalyser.frequencyBinCount);
+      }
+      playbackAnalyser.getByteFrequencyData(lipSyncFreqData);
+      let fSum = 0;
+      for (let i = 0; i < lipSyncFreqData.length; i++) fSum += lipSyncFreqData[i];
+      const rawVolume = (fSum / lipSyncFreqData.length) / 55.0;
+      // Noise Gate: если громкость ниже 0.04, рот моментально закрывается
+      if (rawVolume >= 0.04) {
+        targetVolume = Math.min(1.0, rawVolume);
+      } else {
+        targetVolume = 0;
+      }
+    }
+  }
+
+  // Двухфазный LERP: быстрый подъем (attack = 0.35) и плавный спад (decay = 0.08)
+  const lerpFactor = targetVolume > smoothedVolume ? 0.35 : 0.08;
+  smoothedVolume += (targetVolume - smoothedVolume) * lerpFactor;
+  if (smoothedVolume < 0.005) smoothedVolume = 0;
+
+  if (charGroup) {
+    if (!petState.isSleeping) {
+      // 1. Плавное процедурное дыхание тела и покачивание (Talking Tom style)
+      const breathPulse = Math.sin(time * 2.0) * 0.007;
+      if (currentRoom === 'living') {
+        charGroup.position.y = 0.04 + breathPulse;
+      } else if (currentRoom === 'bathroom') {
+        charGroup.position.y = 0.08 + breathPulse;
+      } else if (currentRoom === 'kitchen') {
+        charGroup.position.y = -0.06 + breathPulse * 0.7;
+      } else if (currentRoom === 'bedroom') {
+        charGroup.position.y = 0.04 + breathPulse;
+      }
+
+      // Микро-движение позвоночника при дыхании
+      if (bones.spine) {
+        bones.spine.rotation.x = Math.sin(time * 2.0) * 0.012;
+      }
+
+      // 2. Оживление взгляда и головы (animateLife): покачивание + слежение за курсором
+      if (bones.head) {
+        const lifeHeadY = Math.sin(time * 1.2) * 0.05;
+        const lifeHeadX = Math.sin(time * 1.8) * 0.03;
+        const targetHeadY = pointer.x * 0.35 + lifeHeadY;
+        const targetHeadX = -(pointer.y * 0.18) + lifeHeadX;
+        bones.head.rotation.y = THREE.MathUtils.lerp(bones.head.rotation.y, targetHeadY, 0.08);
+        bones.head.rotation.x = THREE.MathUtils.lerp(bones.head.rotation.x, targetHeadX, 0.08);
+        // Защита от деформации масштаба: голова строго фиксирована в масштабе (1, 1, 1)
+        bones.head.scale.set(1, 1, 1);
+      }
+
+      // 3. Dual-Path Lip-Sync (Морфы рта clamp 0.85 или кость челюсти clamp 0.38 / микро-наклон головы БЕЗ изменения scale)
+      const mouthOpening = Math.min(smoothedVolume, 0.85);
+      if (characterMesh && characterMesh.morphTargetInfluences && morphMouthIndex !== -1) {
+        // Path 1: Morph Target (mouthOpen, jawOpen, viseme_aa)
+        characterMesh.morphTargetInfluences[morphMouthIndex] = mouthOpening;
+      } else if (bones.jaw) {
+        // Path 2a: Кость челюсти
+        bones.jaw.rotation.x = Math.min(smoothedVolume * 0.35, 0.38);
+      } else if (bones.head) {
+        // Path 2b: Естественный микро-наклон головы при речи без какого-либо сжатия
+        if (isSpeaking && smoothedVolume > 0.04) {
+          bones.head.rotation.x += Math.min(smoothedVolume * 0.06, 0.08);
+        }
+      }
+    } else {
+      // Спящий режим: легкое размеренное дыхание лежа на кровати
+      if (currentRoom === 'bedroom') {
+        charGroup.position.y = 0.62 + Math.sin(time * 1.0) * 0.003;
+      }
+    }
+  }
+
+  // Обновление мягкой контактной тени под ногами
+  if (contactShadowMesh && charGroup) {
+    contactShadowMesh.position.x = charGroup.position.x;
+    contactShadowMesh.position.z = charGroup.position.z;
+    if (currentRoom === 'bathroom') {
+      contactShadowMesh.position.y = 0.042;
+    } else {
+      contactShadowMesh.position.y = 0.003;
+    }
+    contactShadowMesh.visible = !petState.isSleeping;
+  }
+
+  // Анимация струй воды в ванной
+  if (waterParticlesMesh && waterParticlesMesh.visible) {
+    const pos = waterParticlesMesh.geometry.attributes.position.array;
+    for (let i = 0; i < waterDropsData.length; i++) {
+      waterDropsData[i].y -= waterDropsData[i].speed;
+      if (waterDropsData[i].y < 0.05) {
+        waterDropsData[i].y = 2.4;
+      }
+      pos[i * 3 + 1] = waterDropsData[i].y;
+    }
+    waterParticlesMesh.geometry.attributes.position.needsUpdate = true;
+  }
+
+  // Принудительная синхронизация позы рук строго перед отрисовкой кадра
+  applyArmPose();
+
+  renderer.render(scene, camera);
+}
+
+function onResize() {
+  if (!renderer || !camera) return;
+  const W = wrap.clientWidth || window.innerWidth;
+  const H = wrap.clientHeight || window.innerHeight * 0.6;
+  camera.aspect = W / H;
+  camera.updateProjectionMatrix();
+  renderer.setSize(W, H);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 10. ПОВТОРЯЛКА ГОЛОСА TALKING TOM (WEB AUDIO API)
+// ═══════════════════════════════════════════════════════════════
+const TARGET_F0 = 178.8;
+const TARGET_F1 = 609.4;
+const TARGET_F2 = 1890.3;
+const TARGET_F3 = 3020.0;
+
+let voiceAudioCtx = null;
+let micMediaStream = null;
+let micSourceNode = null;
+let voiceScriptNode = null;
+let vadAnalyserNode = null;
+let playbackAnalyser = null;
+
+let currentVoiceAudio = null;
+let currentVoiceBlobUrl = null;
+let voiceVolumeCurve = null;
+let lipSyncFreqData = null;
+let isVoiceProcessing = false;
+
+let isRepeaterActive = false;
+let isRecordingVoice = false;
+let isSpeaking = false;
+let recordedChunks = [];
+let lastSpeechTime = 0;
+
+const VAD_THRESHOLD = 0.022;
+const SILENCE_TIMEOUT = 1000; // 1.0с естественной паузы речи, чтобы фразы не обрывались после первого слова
+
+function showVoiceBadge(status) {
+  const badge = $('voice-status');
+  const dot = $('voice-pulse');
+  const txt = $('voice-status-text');
+  if (!badge) return;
+
+  badge.classList.remove('hidden', 'bg-rose-500/90', 'bg-purple-600/90', 'bg-emerald-600/90', 'bg-indigo-600/90', 'border-rose-300', 'border-purple-300', 'border-emerald-300', 'border-indigo-300');
+  badge.classList.add('flex');
+
+  if (status === 'listening') {
+    badge.classList.add('bg-rose-500/90', 'border-rose-300', 'text-white');
+    if (dot) dot.className = 'w-2.5 h-2.5 rounded-full bg-white animate-ping';
+    if (txt) txt.innerText = 'Слушаю... 👂🎙️';
+  } else if (status === 'processing') {
+    badge.classList.add('bg-indigo-600/90', 'border-indigo-300', 'text-white');
+    if (dot) dot.className = 'w-2.5 h-2.5 rounded-full bg-cyan-300 animate-pulse';
+    if (txt) txt.innerText = 'Обрабатываю голос... 🧠✨';
+  } else if (status === 'speaking') {
+    badge.classList.add('bg-purple-600/90', 'border-purple-300', 'text-white');
+    if (dot) dot.className = 'w-2.5 h-2.5 rounded-full bg-yellow-300 animate-bounce';
+    if (txt) txt.innerText = 'Говорю! 🗣️✨';
+  } else if (status === 'waiting') {
+    badge.classList.add('bg-emerald-600/90', 'border-emerald-300', 'text-white');
+    if (dot) dot.className = 'w-2.5 h-2.5 rounded-full bg-emerald-200 animate-pulse';
+    if (txt) txt.innerText = 'Жду голос... 👂';
+  } else if (status === 'error' || status === 'rvc_offline') {
+    badge.classList.add('bg-amber-600/95', 'border-amber-300', 'text-white');
+    if (dot) dot.className = 'w-2.5 h-2.5 rounded-full bg-yellow-200 animate-ping';
+    if (txt) txt.innerText = '⚠️ Запустите local_rvc/run_rvc.bat для синтеза голоса!';
+  }
+}
+
+function hideVoiceBadge() {
+  const badge = $('voice-status');
+  if (badge) {
+    badge.classList.add('hidden');
+    badge.classList.remove('flex');
+  }
+}
+
+// Генерация 16-бит PCM WAV Blob из float32 сэмплов (совместимо со всеми RVC/FFmpeg)
+function bufferToWavBlob(samples, sampleRate) {
+  const buffer = new ArrayBuffer(44 + samples.length * 2);
+  const view = new DataView(buffer);
+  function writeString(offset, string) {
+    for (let i = 0; i < string.length; i++) {
+      view.setUint8(offset + i, string.charCodeAt(i));
+    }
+  }
+  writeString(0, 'RIFF');
+  view.setUint32(4, 36 + samples.length * 2, true);
+  writeString(8, 'WAVE');
+  writeString(12, 'fmt ');
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true);
+  view.setUint16(22, 1, true);
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, sampleRate * 2, true);
+  view.setUint16(32, 2, true);
+  view.setUint16(34, 16, true);
+  writeString(36, 'data');
+  view.setUint32(40, samples.length * 2, true);
+  let offset = 44;
+  for (let i = 0; i < samples.length; i++, offset += 2) {
+    let s = Math.max(-1, Math.min(1, samples[i]));
+    view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
+  }
+  return new Blob([buffer], { type: 'audio/wav' });
+}
+
+async function toggleVoiceRepeater() {
+  safeHaptic('medium');
+  const btn = $('btn-mic');
+  const icon = $('mic-icon');
+  const txt = $('mic-text');
+
+  if (isRepeaterActive) {
+    isRepeaterActive = false;
+    isRecordingVoice = false;
+    isSpeaking = false;
+    isVoiceProcessing = false;
+    if (currentVoiceAudio) {
+      try {
+        currentVoiceAudio.pause();
+        currentVoiceAudio.currentTime = 0;
+      } catch (_) {}
+      currentVoiceAudio = null;
+    }
+    if (currentVoiceBlobUrl) {
+      URL.revokeObjectURL(currentVoiceBlobUrl);
+      currentVoiceBlobUrl = null;
+    }
+    voiceVolumeCurve = null;
+    recordedChunks = [];
+    hideVoiceBadge();
+    btn?.classList.remove('bg-gradient-to-r', 'from-purple-500', 'to-pink-500', 'text-white', 'border-transparent', 'shadow-md', 'animate-pulse');
+    btn?.classList.add('glass', 'text-purple-700', 'border-purple-300');
+    if (icon) icon.innerText = '🎙️';
+    if (txt) txt.innerText = 'Голос';
+    if (micMediaStream) {
+      micMediaStream.getTracks().forEach(t => t.stop());
+      micMediaStream = null;
+    }
+    updateSpeech('Режим повторялки выключен 💤');
+    return;
+  }
+
+  try {
+    if (!voiceAudioCtx) {
+      voiceAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    if (voiceAudioCtx.state === 'suspended') {
+      await voiceAudioCtx.resume();
+    }
+
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      if (window.location.protocol !== 'https:' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+        alert('Браузер блокирует микрофон по незащищенному сетевому адресу (' + window.location.hostname + ')!\n\nКак включить:\n1) На этом компьютере просто откройте: http://localhost:5000 (Chrome автоматически разрешает микрофон для localhost)\n\n2) Или для доступа с телефона запустите start_https.bat и перейдите на https://' + window.location.host);
+        return;
+      }
+      throw new Error('navigator.mediaDevices.getUserMedia не поддерживается в этом браузере.');
+    }
+
+    if (!micMediaStream) {
+      micMediaStream = await navigator.mediaDevices.getUserMedia({
+        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+        video: false
+      });
+
+      micSourceNode = voiceAudioCtx.createMediaStreamSource(micMediaStream);
+
+      // Полосовой фильтр (Highpass 150 Гц + Lowpass 8000 Гц)
+      const hp = voiceAudioCtx.createBiquadFilter();
+      hp.type = 'highpass'; hp.frequency.value = 150; hp.Q.value = 0.707;
+
+      const lp = voiceAudioCtx.createBiquadFilter();
+      lp.type = 'lowpass'; lp.frequency.value = 8000; lp.Q.value = 0.707;
+
+      micSourceNode.connect(hp);
+      hp.connect(lp);
+
+      vadAnalyserNode = voiceAudioCtx.createAnalyser();
+      vadAnalyserNode.fftSize = 512;
+      lp.connect(vadAnalyserNode);
+
+      voiceScriptNode = voiceAudioCtx.createScriptProcessor(2048, 1, 1);
+      voiceScriptNode.onaudioprocess = (e) => {
+        if (!isRepeaterActive || isSpeaking || isVoiceProcessing) return;
+        const input = e.inputBuffer.getChannelData(0);
+        let sum = 0;
+        for (let i = 0; i < input.length; i++) sum += input[i] * input[i];
+        const rms = Math.sqrt(sum / input.length);
+        const now = Date.now();
+
+        if (rms > VAD_THRESHOLD) {
+          if (!isRecordingVoice) {
+            isRecordingVoice = true;
+            recordedChunks = [];
+            showVoiceBadge('listening');
+            updateSpeech('Слушаю тебя... ✨🎙️');
+          }
+          lastSpeechTime = now;
+          recordedChunks.push(new Float32Array(input));
+        } else if (isRecordingVoice) {
+          recordedChunks.push(new Float32Array(input));
+          if (now - lastSpeechTime > SILENCE_TIMEOUT) {
+            isRecordingVoice = false;
+            const minSamples = Math.floor(voiceAudioCtx.sampleRate * 0.3);
+            let curTotal = 0;
+            for (let c of recordedChunks) curTotal += c.length;
+            if (curTotal >= minSamples) {
+              handleRecordedVoicePhrase();
+            } else {
+              recordedChunks = [];
+              showVoiceBadge('waiting');
+            }
+          }
+        }
+      };
+
+      const silentGain = voiceAudioCtx.createGain();
+      silentGain.gain.value = 0;
+      lp.connect(voiceScriptNode);
+      voiceScriptNode.connect(silentGain);
+      silentGain.connect(voiceAudioCtx.destination);
+    }
+
+    isRepeaterActive = true;
+    btn?.classList.remove('glass', 'text-purple-700', 'border-purple-300');
+    btn?.classList.add('bg-gradient-to-r', 'from-purple-500', 'to-pink-500', 'text-white', 'border-transparent', 'shadow-md', 'animate-pulse');
+    if (icon) icon.innerText = '🔴';
+    if (txt) txt.innerText = 'Голос ВКЛ';
+
+    showVoiceBadge('waiting');
+    updateSpeech('Скажи что-нибудь в микрофон, и я повторю своим голоском! 🎙️✨');
+    playSfx('fanfare');
+  } catch (err) {
+    console.error('Ошибка доступа к микрофону:', err);
+    if (window.location.protocol !== 'https:' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+      alert('🔒 Chrome блокирует микрофон по незащищенному IP (' + window.location.hostname + ')!\n\nРешение:\n1) На компьютере откройте: http://localhost:5000 (в Chrome микрофон разрешен для localhost без HTTPS!)\n\n2) Для смартфона по Wi-Fi: запустите start_https.bat и перейдите на https://' + window.location.hostname + ':5000');
+    } else {
+      alert('Пожалуйста, разрешите доступ к микрофону в настройках браузера, чтобы Лёля могла повторять ваш голос! 🎙️');
+    }
+  }
+}
+
+// Обработка записанной фразы: сквозное эхо (Pass-through Echo) с синхронным липсинком
+function handleRecordedVoicePhrase() {
+  if (recordedChunks.length === 0 || !voiceAudioCtx) return;
+  if (isSpeaking || isVoiceProcessing) return;
+
+  isVoiceProcessing = true;
+  let totalLength = 0;
+  for (let c of recordedChunks) totalLength += c.length;
+  const merged = new Float32Array(totalLength);
+  let offset = 0;
+  for (let c of recordedChunks) {
+    merged.set(c, offset);
+    offset += c.length;
+  }
+  recordedChunks = [];
+
+  showVoiceBadge('processing');
+  updateSpeech('Слушаю тебя... ✨🎶');
+
+  const wavBlob = bufferToWavBlob(merged, voiceAudioCtx.sampleRate);
+  const formData = new FormData();
+  formData.append('audio', wavBlob, 'recording.wav');
+  formData.append('mode', 'passthrough');
+  formData.append('use_rvc', 'false');
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 15000);
+
+  fetch('/api/repeat_voice', {
+    method: 'POST',
+    body: formData,
+    signal: controller.signal
+  })
+  .then(async (res) => {
+    clearTimeout(timeoutId);
+    isVoiceProcessing = false;
+    if (!res.ok) throw new Error('Voice server HTTP error: ' + res.status);
+    const contentType = res.headers.get('content-type') || '';
+    if (contentType.includes('application/json')) {
+      const json = await res.json();
+      if (json.status === 'fallback' || json.use_client_synth) {
+        await playVoiceAudioBlob(wavBlob);
+        return;
+      }
+    }
+    const audioBlob = await res.blob();
+    await playVoiceAudioBlob(audioBlob);
+  })
+  .catch(async (err) => {
+    clearTimeout(timeoutId);
+    isVoiceProcessing = false;
+    console.warn('Voice pass-through fallback directly to recorded wav:', err);
+    await playVoiceAudioBlob(wavBlob);
+  });
+}
+
+// Быстрый расчет огибающей громкости для точной и плавной анимации рта
+async function extractVolumeCurveFromBlob(blob) {
+  try {
+    const arrayBuffer = await blob.arrayBuffer();
+    if (!voiceAudioCtx) {
+      voiceAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    const audioBuffer = await voiceAudioCtx.decodeAudioData(arrayBuffer.slice(0));
+    const channelData = audioBuffer.getChannelData(0);
+    const step = Math.floor(audioBuffer.sampleRate * 0.04); // 40мс квант (25 fps)
+    const count = Math.ceil(channelData.length / step);
+    const curve = new Float32Array(count);
+    for (let i = 0; i < count; i++) {
+      let sum = 0;
+      const start = i * step;
+      const end = Math.min(start + step, channelData.length);
+      const len = end - start;
+      if (len > 0) {
+        for (let j = start; j < end; j++) {
+          sum += channelData[j] * channelData[j];
+        }
+        const rms = Math.sqrt(sum / len);
+        curve[i] = Math.min(1.0, rms * 4.0);
+      }
+    }
+    return curve;
+  } catch (e) {
+    console.warn('[LipSync] Ошибка вычисления огибающей:', e);
+    return null;
+  }
+}
+
+// Воспроизведение через нативный HTML5 Audio (чистый звук без заиканий и сдвигов частоты)
+async function playVoiceAudioBlob(blob) {
+  if (!blob) return;
+
+  // Останавливаем любое активное воспроизведение
+  if (currentVoiceAudio) {
+    try {
+      currentVoiceAudio.pause();
+      currentVoiceAudio.currentTime = 0;
+    } catch (_) {}
+    currentVoiceAudio = null;
+  }
+  if (currentVoiceBlobUrl) {
+    URL.revokeObjectURL(currentVoiceBlobUrl);
+    currentVoiceBlobUrl = null;
+  }
+
+  isSpeaking = true;
+  showVoiceBadge('speaking');
+  updateSpeech('Повторяю за тобой! 🎙️✨');
+
+  // Рассчитываем огибающую громкости перед стартом, чтобы липсинк с 0-й секунды был точен
+  try {
+    voiceVolumeCurve = await extractVolumeCurveFromBlob(blob);
+  } catch (_) {
+    voiceVolumeCurve = null;
+  }
+
+  currentVoiceBlobUrl = URL.createObjectURL(blob);
+  const audio = new Audio();
+  audio.preload = 'auto';
+  audio.src = currentVoiceBlobUrl;
+  currentVoiceAudio = audio;
+
+  if (charGroup) {
+    gsap.to(charGroup.rotation, {
+      z: 0.05, duration: 0.16, yoyo: true, repeat: 7, ease: 'sine.inOut',
+      onComplete: () => { if (charGroup) charGroup.rotation.z = 0; }
+    });
+  }
+
+  const finishPlayback = () => {
+    if (currentVoiceAudio !== audio) return;
+    isSpeaking = false;
+    currentVoiceAudio = null;
+    voiceVolumeCurve = null;
+    if (currentVoiceBlobUrl) {
+      URL.revokeObjectURL(currentVoiceBlobUrl);
+      currentVoiceBlobUrl = null;
+    }
+
+    if (isRepeaterActive) {
+      showVoiceBadge('waiting');
+      updateSpeech('Скажи что-нибудь ещё, я повторю! 💖🎙️');
+    } else {
+      hideVoiceBadge();
+    }
+    petState.fun = Math.min(100, petState.fun + 8);
+    petState.coins += 2;
+    saveState();
+    updateHUD();
+
+    fetch('/api/action', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'voice' })
+    }).catch(() => {});
+  };
+
+  audio.onended = finishPlayback;
+  audio.onerror = (e) => {
+    console.warn('[Voice Audio] Ошибка воспроизведения:', e);
+    finishPlayback();
+  };
+
+  try {
+    await audio.play();
+  } catch (err) {
+    console.warn('[Voice Audio] play() error:', err);
+    finishPlayback();
+  }
+}
+
+// Fallback воспроизведение при недоступности внешнего RVC сервера
+function playClientWebAudioFallback(mergedSamples) {
+  if (!mergedSamples || mergedSamples.length === 0) return;
+  const sampleRate = voiceAudioCtx ? voiceAudioCtx.sampleRate : 44100;
+  const wavBlob = bufferToWavBlob(mergedSamples, sampleRate);
+  playVoiceAudioBlob(wavBlob, false);
+}
+
+$('btn-mic')?.addEventListener('click', toggleVoiceRepeater);
+
+// ─── 11. АРКАДА «ЛОВЕЦ СЧАСТЬЯ» ───────────────────────────────────────────────
+const arcadeModal = $('arcade-modal');
+const arcadeCanvas = $('arcade-canvas');
+let arcadeCtx = null;
+let arcadeAnimId = null;
+let arcadeBasket = { x: 150, y: 0, w: 70, h: 35 };
+let arcadeItems = [];
+let arcadeScore = 0;
+let arcadeLives = 3;
+let arcadeCoinsEarned = 0;
+let arcadeRunning = false;
+let arcadeLastSpawn = 0;
+
+const FALLING_TYPES = [
+  { emoji: '☕', pts: 10, coins: 1, type: 'good' },
+  { emoji: '🍕', pts: 15, coins: 2, type: 'good' },
+  { emoji: '💐', pts: 25, coins: 3, type: 'good' },
+  { emoji: '💖', pts: 20, coins: 2, type: 'good' },
+  { emoji: '🧁', pts: 15, coins: 2, type: 'good' },
+  { emoji: '💎', pts: 50, coins: 5, type: 'good' },
+  { emoji: '⏰', pts: 0, coins: 0, type: 'bad' },
+  { emoji: '💔', pts: 0, coins: 0, type: 'bad' }
+];
+
+function openArcade() {
+  safeHaptic('success');
+  arcadeModal.classList.remove('hidden');
+  arcadeModal.classList.add('flex');
+  $('arcade-intro').classList.remove('hidden');
+  resizeArcadeCanvas();
+}
+
+function resizeArcadeCanvas() {
+  if (!arcadeCanvas) return;
+  arcadeCanvas.width = arcadeCanvas.parentElement.clientWidth;
+  arcadeCanvas.height = arcadeCanvas.parentElement.clientHeight;
+  arcadeBasket.y = arcadeCanvas.height - 45;
+  arcadeBasket.x = arcadeCanvas.width / 2 - arcadeBasket.w / 2;
+  arcadeCtx = arcadeCanvas.getContext('2d');
+}
+
+function startArcadeGame() {
+  $('arcade-intro').classList.add('hidden');
+  arcadeScore = 0; arcadeLives = 3; arcadeCoinsEarned = 0;
+  arcadeItems = []; arcadeRunning = true; arcadeLastSpawn = Date.now();
+
+  $('arcade-score').innerText = '0';
+  $('arcade-coins-earned').innerText = '0';
+  renderArcadeLives();
+
+  if (arcadeAnimId) cancelAnimationFrame(arcadeAnimId);
+  arcadeLoop();
+}
+
+function renderArcadeLives() {
+  const container = $('arcade-lives');
+  if (!container) return;
+  let html = '';
+  for (let i = 0; i < 3; i++) {
+    html += i < arcadeLives ? '<span class="text-lg">❤️</span>' : '<span class="text-lg opacity-30">🖤</span>';
+  }
+  container.innerHTML = html;
+}
+
+const onArcadeDrag = (e) => {
+  if (!arcadeRunning) return;
+  const rect = arcadeCanvas.getBoundingClientRect();
+  const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+  const x = clientX - rect.left;
+  arcadeBasket.x = Math.max(0, Math.min(arcadeCanvas.width - arcadeBasket.w, x - arcadeBasket.w / 2));
+};
+arcadeCanvas.addEventListener('mousemove', onArcadeDrag);
+arcadeCanvas.addEventListener('touchmove', onArcadeDrag, { passive: true });
+
+function arcadeLoop() {
+  if (!arcadeRunning) return;
+  arcadeAnimId = requestAnimationFrame(arcadeLoop);
+
+  const now = Date.now();
+  arcadeCtx.clearRect(0, 0, arcadeCanvas.width, arcadeCanvas.height);
+
+  if (now - arcadeLastSpawn > 650) {
+    const itemType = FALLING_TYPES[Math.floor(Math.random() * FALLING_TYPES.length)];
+    arcadeItems.push({
+      x: 20 + Math.random() * (arcadeCanvas.width - 50),
+      y: -20,
+      speed: 3.2 + Math.random() * 2.0 + (arcadeScore * 0.015),
+      ...itemType
+    });
+    arcadeLastSpawn = now;
+  }
+
+  for (let i = arcadeItems.length - 1; i >= 0; i--) {
+    const item = arcadeItems[i];
+    item.y += item.speed;
+
+    arcadeCtx.font = '28px sans-serif';
+    arcadeCtx.textAlign = 'center';
+    arcadeCtx.fillText(item.emoji, item.x, item.y);
+
+    const caught = (
+      item.y >= arcadeBasket.y - 10 &&
+      item.y <= arcadeBasket.y + arcadeBasket.h &&
+      item.x >= arcadeBasket.x - 15 &&
+      item.x <= arcadeBasket.x + arcadeBasket.w + 15
+    );
+
+    if (caught) {
+      if (item.type === 'good') {
+        playSfx('tap');
+        safeHaptic('light');
+        arcadeScore += item.pts;
+        arcadeCoinsEarned += item.coins;
+        $('arcade-score').innerText = arcadeScore;
+        $('arcade-coins-earned').innerText = arcadeCoinsEarned;
+      } else {
+        safeHaptic('warning');
+        arcadeLives--;
+        renderArcadeLives();
+        if (arcadeLives <= 0) {
+          endArcadeGame();
+          return;
+        }
+      }
+      arcadeItems.splice(i, 1);
+      continue;
+    }
+
+    if (item.y > arcadeCanvas.height + 30) arcadeItems.splice(i, 1);
+  }
+
+  arcadeCtx.font = '36px sans-serif';
+  arcadeCtx.textAlign = 'center';
+  arcadeCtx.fillText('🧺', arcadeBasket.x + arcadeBasket.w / 2, arcadeBasket.y + 24);
+}
+
+function endArcadeGame() {
+  arcadeRunning = false;
+  if (arcadeAnimId) cancelAnimationFrame(arcadeAnimId);
+
+  playSfx('fanfare');
+  safeHaptic('success');
+
+  petState.fun = 100;
+  petState.coins += arcadeCoinsEarned;
+  saveState();
+
+  confetti({ particleCount: 90, spread: 70, origin: { y: 0.6 } });
+
+  setTimeout(() => {
+    alert(`🎉 Игра окончена!\nНабрано очков: ${arcadeScore}!\nЗаработано: +${arcadeCoinsEarned} 🪙\nНастроение Лёли 100%! ✨`);
+    arcadeModal.classList.add('hidden');
+    arcadeModal.classList.remove('flex');
+  }, 200);
+}
+
+$('btn-start-arcade')?.addEventListener('click', openArcade);
+$('btn-start-game-now')?.addEventListener('click', startArcadeGame);
+$('btn-close-arcade')?.addEventListener('click', () => {
+  arcadeRunning = false;
+  if (arcadeAnimId) cancelAnimationFrame(arcadeAnimId);
+  arcadeModal.classList.add('hidden');
+  arcadeModal.classList.remove('flex');
+});
+
+// ─── 12. МАГАЗИН УЮТА (СМЕНА ОБОЕВ В ГОСТИНОЙ) ───────────────────────────────
+const shopModal = $('shop-modal');
+$('btn-open-shop')?.addEventListener('click', () => {
+  shopModal.classList.remove('hidden');
+  shopModal.classList.add('flex');
+  safeHaptic('light');
+});
+$('btn-close-shop')?.addEventListener('click', () => {
+  shopModal.classList.add('hidden');
+  shopModal.classList.remove('flex');
+});
+
+const THEME_PALETTES = {
+  pink:     { c1: '#fdf2f4', c2: '#fce7f3' },
+  mint:     { c1: '#f0fdf4', c2: '#dcfce7' },
+  lavender: { c1: '#faf5ff', c2: '#f3e8ff' },
+  gold:     { c1: '#fffbeb', c2: '#fef3c7' }
+};
+
+document.querySelectorAll('.btn-theme-apply').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const theme = btn.dataset.theme;
+    const cost = parseInt(btn.dataset.cost) || 0;
+
+    if (cost > 0 && petState.coins < cost) {
+      safeHaptic('error');
+      alert('Недостаточно монеток любви! Заработай их в мини-игре 🎮');
+      return;
+    }
+
+    if (cost > 0) {
+      petState.coins -= cost;
+      saveState();
+    }
+
+    safeHaptic('success');
+    playSfx('fanfare');
+
+    const pal = THEME_PALETTES[theme] || THEME_PALETTES.pink;
+    if (livingBackWallMesh) {
+      livingBackWallMesh.material = createWallPaperMaterial(pal.c1, pal.c2);
+    }
+
+    shopModal.classList.add('hidden');
+    shopModal.classList.remove('flex');
+    updateSpeech('Какая красота! Спасибо за новый уют в гостиной! ✨💖');
+  });
+});
+
+// ─── 13. РЕАКЦИИ ПАРНЯ И БЫСТРАЯ ЭМУЛЯЦИЯ ─────────────────────────────────────
+async function pollReactions() {
+  try {
+    const res = await fetch('/api/reactions');
+    if (!res.ok) return;
+    const data = await res.json();
+    (data.reactions || []).forEach(showGiftCelebration);
+  } catch(_) {}
+}
+setInterval(pollReactions, 5000);
+
+function showGiftCelebration(gift) {
+  safeHaptic('heavy');
+  playSfx('fanfare');
+  playVoiceClip('kiss');
+
+  petState.hunger  = 100;
+  petState.energy  = 100;
+  petState.hygiene = 100;
+  petState.fun     = 100;
+  petState.isSleeping = false;
+  saveState();
+
+  confetti({
+    particleCount: 120, spread: 90, origin: { y: 0.55 },
+    colors: ['#f43f5e', '#ec4899', '#fb7185', '#fda4af', '#fef08a']
+  });
+
+  $('gift-text').innerText = `${gift.message}\nВсе показатели восстановлены на 100%! 💕🎉`;
+  const modal = $('gift-modal');
+  modal.classList.remove('hidden');
+  modal.classList.add('flex');
+
+  if (charGroup) {
+    gsap.to(charGroup.rotation, { y: charGroup.rotation.y + Math.PI * 2, duration: 1.0, ease: 'power2.out' });
+    triggerSquashAndStretch();
+  }
+}
+
+$('gift-close')?.addEventListener('click', () => {
+  safeHaptic('light');
+  $('gift-modal').classList.add('hidden');
+  $('gift-modal').classList.remove('flex');
+});
+
+$('btn-quick-sim')?.addEventListener('click', async () => {
+  safeHaptic('medium');
+  const gifts = ['gift:pet', 'gift:food', 'gift:kiss'];
+  const chosen = gifts[Math.floor(Math.random() * gifts.length)];
+  try {
+    const r = await fetch('/api/debug/simulate-gift', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ callback_data: chosen })
+    });
+    const d = await r.json();
+    showGiftCelebration({ message: d.message || 'Любимый передал лучики тепла! 🥰✨' });
+  } catch(_) {
+    showGiftCelebration({ message: 'Любимый передал лучики тепла! 🥰✨' });
+  }
+});
+
+// Частицы сердечек и текста
+function spawnHeart(x, y) {
+  const overlay = $('particles');
+  if (!overlay) return;
+  const h = document.createElement('div');
+  h.className = 'absolute font-black text-2xl pointer-events-none z-30';
+  h.innerText = ['💖', '💕', '🥰', '✨'][Math.floor(Math.random() * 4)];
+  h.style.left = `${x + (Math.random() - 0.5) * 50}px`;
+  h.style.top  = `${y}px`;
+  overlay.appendChild(h);
+
+  gsap.to(h, {
+    y: -90 - Math.random() * 50, x: (Math.random() - 0.5) * 40, opacity: 0,
+    duration: 1.4, ease: 'power1.out', onComplete: () => h.remove()
+  });
+}
+
+function spawnFloatingText(text, x, y) {
+  const overlay = $('particles');
+  if (!overlay) return;
+  const tag = document.createElement('div');
+  tag.className = 'absolute font-black text-sm text-pink-600 pointer-events-none z-40';
+  tag.innerText = text;
+  tag.style.left = `${x}px`;
+  tag.style.top  = `${y}px`;
+  tag.style.transform = 'translate(-50%, -50%)';
+  overlay.appendChild(tag);
+
+  gsap.to(tag, {
+    y: -60, scale: 1.3, opacity: 0, duration: 1.2, ease: 'power1.out',
+    onComplete: () => tag.remove()
+  });
+}
+
+// ─── СТАРТ ПРИЛОЖЕНИЯ ─────────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+  loadState();
+  initThreeScene();
+  pollReactions();
+});
+</script>
+</body>
+</html>

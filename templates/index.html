@@ -513,11 +513,11 @@ function safeHaptic(style = 'light') {
 // ─── ЗВУКОВОЙ ДВИЖОК И БАНК ОРИГИНАЛЬНЫХ ФРАЗ (/static/voice/) ────────────────
 let isSoundOn = true;
 const VOICE_BANK = {
-  giggle: '/static/voice/giggle.wav',
-  yawn:   '/static/voice/yawn.wav',
-  eat:    '/static/voice/eat.wav',
-  sigh:   '/static/voice/sigh.wav',
-  kiss:   '/static/voice/kiss.wav'
+  giggle: 'static/voice/giggle.wav',
+  yawn:   'static/voice/yawn.wav',
+  eat:    'static/voice/eat.wav',
+  sigh:   'static/voice/sigh.wav',
+  kiss:   'static/voice/kiss.wav'
 };
 
 function playVoiceClip(name) {
@@ -1913,7 +1913,7 @@ function loadCharacterModel() {
   const txt = $('load-text');
 
   loader.load(
-    '/static/models/girl.glb?v=' + Date.now(),
+    'static/models/girl.glb?v=' + Date.now(),
     (gltf) => {
       charGroup = new THREE.Group();
       const model = gltf.scene;
