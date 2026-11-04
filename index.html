@@ -3,6 +3,9 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
   <title>Тамагочи Лёли ✨ (My Talking Tom 3D)</title>
 
   <!-- Telegram WebApp SDK -->
@@ -1772,24 +1775,24 @@ function buildCharacterLegs() {
   const legsGroup = new THREE.Group();
   legsGroup.name = 'characterLegs';
 
-  // Плиссированная мини-юбка вокруг талии/бедер модели
+  // Аккуратная плиссированная юбка (верх 0.106, низ 0.145, высота 0.13, 24 сегмента)
   const skirtMat = createPleatedSkirtMaterial();
-  const skirtGeo = new THREE.CylinderGeometry(0.118, 0.160, 0.14, 24, 1, false);
+  const skirtGeo = new THREE.CylinderGeometry(0.106, 0.145, 0.13, 24, 1, false);
   const skirt = new THREE.Mesh(skirtGeo, skirtMat);
-  skirt.position.set(0, 0.47, 0.01);
+  skirt.position.set(0, 0.43, 0);
   skirt.rotation.set(0, 0, 0); // Строго горизонтально и симметрично относительно ног
   skirt.castShadow = true;
   legsGroup.add(skirt);
 
-  // Контрастный аккуратный кант по нижнему краю юбки
-  const hemGeo = new THREE.CylinderGeometry(0.1605, 0.1615, 0.008, 24, 1, true);
+  // Контрастный аккуратный кант по нижнему краю
+  const hemGeo = new THREE.CylinderGeometry(0.1455, 0.1465, 0.008, 24, 1, true);
   const hemMat = new THREE.MeshStandardMaterial({
     color: 0xf8fafc,
     roughness: 0.70,
     metalness: 0.05
   });
   const hemTrim = new THREE.Mesh(hemGeo, hemMat);
-  hemTrim.position.set(0, 0.47 - 0.07, 0.01);
+  hemTrim.position.set(0, 0.43 - 0.065, 0);
   hemTrim.rotation.set(0, 0, 0);
   legsGroup.add(hemTrim);
 
@@ -1852,6 +1855,8 @@ function buildCharacterLegs() {
   return legsGroup;
 }
 
+// Процедурная деформация вершин полностью отключена для сохранения чистоты оригинальной сетки girl.glb
+
 // ─── ЗАГРУЗКА GIRL.GLB + СОХРАНЕНИЕ ОРИГИНАЛЬНЫХ МАТЕРИАЛОВ И АНИМАЦИИ ───────
 function loadCharacterModel() {
   const loader = new THREE.GLTFLoader();
@@ -1859,7 +1864,7 @@ function loadCharacterModel() {
   const txt = $('load-text');
 
   loader.load(
-    'static/models/girl.glb?v=' + Date.now(),
+    'static/models/girl.glb?v=clean_' + Date.now(),
     (gltf) => {
       charGroup = new THREE.Group();
       const model = gltf.scene;
@@ -1944,6 +1949,8 @@ function loadCharacterModel() {
             child.updateMorphTargets();
             morphEyeBlinkIndex = 0;
             morphMouthIndex = 1;
+
+            
           }
         }
         if (child.isBone) {
@@ -1988,10 +1995,16 @@ function loadCharacterModel() {
       model.scale.setScalar(scaleFactor);
       model.position.set(-center.x * scaleFactor, -box.min.y * scaleFactor, -center.z * scaleFactor);
 
-      // Добавляем плиссированную мини-юбку на талию персонажа
-      characterLegs = buildCharacterLegs();
-      charGroup.add(characterLegs);
-      window.characterLegs = characterLegs;
+      // Сброс всех костей скелета в дефолтные углы (0, 0, 0)
+      for (let k in bones) {
+        if (bones[k]) {
+          bones[k].rotation.set(0, 0, 0);
+          initialBoneRots[k] = bones[k].rotation.clone();
+        }
+      }
+      console.log('--- SKELETON BONES FOUND IN GIRL.GLB ---', Object.keys(bones).filter(k => bones[k]));
+      characterLegs = null;
+      window.characterLegs = null;
 
       charGroup.add(model);
       charGroup.scale.setScalar(baseScale);
@@ -3063,25 +3076,6 @@ function animate() {
         bones.spine.rotation.x = Math.sin(time * 2.0) * 0.012;
       }
 
-      // 1b. Естественная поза рук через кости скелета (как в коммите 8efc889)
-      if (bones.leftArm) {
-        bones.leftArm.rotation.x = 0.15;
-        bones.leftArm.rotation.z = -1.15;
-      }
-      if (bones.rightArm) {
-        if (armLiftAmount > 0.01) {
-          bones.rightArm.rotation.x = THREE.MathUtils.lerp(0.15, 0.85, armLiftAmount);
-          bones.rightArm.rotation.z = THREE.MathUtils.lerp(1.15, 0.40, armLiftAmount);
-          if (bones.rightForeArm) {
-            bones.rightForeArm.rotation.x = THREE.MathUtils.lerp(0.0, 0.60, armLiftAmount);
-          }
-        } else {
-          bones.rightArm.rotation.x = 0.15;
-          bones.rightArm.rotation.z = 1.15;
-          if (bones.rightForeArm) bones.rightForeArm.rotation.x = 0;
-        }
-      }
-
       // 2. Оживление взгляда и головы (animateLife): покачивание + слежение за курсором
       if (bones.head) {
         const lifeHeadY = Math.sin(time * 1.2) * 0.05;
@@ -3140,6 +3134,8 @@ function animate() {
     }
     waterParticlesMesh.geometry.attributes.position.needsUpdate = true;
   }
+
+  
 
   renderer.render(scene, camera);
 }
