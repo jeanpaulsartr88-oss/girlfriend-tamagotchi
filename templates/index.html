@@ -3,7 +3,7 @@
 <head>
   <!-- Принудительный сброс устаревшего кэша браузера -->
   <script>
-    const APP_BUILD_VER = '20261104-v7-market-games';
+    const APP_BUILD_VER = '20261104-v8-mobile-opt';
     if (localStorage.getItem('tamagotchi_build_ver') !== APP_BUILD_VER) {
       localStorage.setItem('tamagotchi_build_ver', APP_BUILD_VER);
       if ('caches' in window) {
@@ -45,13 +45,27 @@
       user-select: none;
       -webkit-user-select: none;
     }
-    html, body {
-      margin: 0; padding: 0;
-      width: 100%; height: 100%; height: 100dvh;
+    html, body, #app-container {
+      height: 100dvh; /* динамический вьюпорт с учетом адресной строки */
+      width: 100vw;
+      margin: 0;
+      padding: 0;
       overflow: hidden;
-      touch-action: none;
+      position: fixed;
+      inset: 0;
+      touch-action: none; /* запрет жестов свайпа браузера */
+      overscroll-behavior: none;
+      user-select: none;
+      -webkit-user-select: none;
+      -webkit-touch-callout: none;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
       background: #09090b;
+    }
+    header {
+      padding-top: max(env(safe-area-inset-top), 8px);
+    }
+    nav, .bottom-panel {
+      padding-bottom: max(env(safe-area-inset-bottom), 12px);
     }
     .glass {
       background: rgba(255, 255, 255, 0.70);
@@ -191,12 +205,12 @@
     }
   </style>
 </head>
-<body class="flex flex-col select-none">
+<body id="app-container" class="flex flex-col select-none">
 
 <!-- ═══════════════════════════════════════════════════════════
      1. ВЕРХНИЙ ХЕДЕР (HUD)
 ════════════════════════════════════════════════════════════════ -->
-<header class="w-full max-w-md mx-auto px-3 pt-2 z-30 flex-shrink-0" style="padding-top:calc(var(--sat) + 8px)">
+<header class="w-full max-w-md mx-auto px-3 z-30 flex-shrink-0">
   <div class="flex items-center justify-between px-1 gap-1.5">
     <!-- Баланс монеток с кнопкой магазина -->
     <button id="btn-open-shop" type="button" class="flex items-center gap-1 glass px-2.5 py-1.5 rounded-full shadow-sm active:scale-95 transition-transform">
@@ -411,7 +425,7 @@
 <!-- ═══════════════════════════════════════════════════════════
      4. НИЖНЯЯ ПАНЕЛЬ С КРУГЛЫМИ ИНДИКАТОРАМИ (TALKING TOM STYLE)
 ════════════════════════════════════════════════════════════════ -->
-<nav class="w-full max-w-md mx-auto px-4 pb-2 z-30 flex-shrink-0" style="padding-bottom:calc(var(--sab) + 6px)">
+<nav class="w-full max-w-md mx-auto px-4 z-30 flex-shrink-0 bottom-panel">
   <div class="glass rounded-3xl p-2 shadow-xl flex justify-around items-center border border-white/80">
 
     <!-- 1. ГОСТИНАЯ (ВЕСЕЛЬЕ / ИГРЫ) -->
@@ -468,7 +482,7 @@
 <!-- ═══════════════════════════════════════════════════════════
      5. ВСТРОЕННАЯ АРКАДНАЯ МИНИ-ИГРА «ЛОВЕЦ СЧАСТЬЯ»
 ════════════════════════════════════════════════════════════════ -->
-<div id="arcade-modal" class="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-md hidden flex-col justify-between p-3">
+<div id="arcade-modal" class="fixed inset-0 z-50 bg-slate-950/90 backdrop-blur-md hidden flex-col justify-between p-2 sm:p-3 select-none overflow-hidden h-[100dvh]">
   <!-- Верхняя строка аркады -->
   <div class="flex items-center justify-between glass px-4 py-2 rounded-2xl shadow-lg">
     <div class="flex items-center gap-1.5">
@@ -491,7 +505,7 @@
 
   <!-- Холст игры HTML5 Canvas -->
   <div class="relative flex-1 w-full my-2 overflow-hidden rounded-2xl border-2 border-white/20 shadow-inner bg-gradient-to-b from-pink-900/40 via-purple-900/30 to-indigo-950/60">
-    <canvas id="arcade-canvas" class="w-full h-full block"></canvas>
+    <canvas id="arcade-canvas" class="block touch-none select-none"></canvas>
     <div id="arcade-intro" class="absolute inset-0 flex flex-col items-center justify-center bg-black/50 p-4 text-center">
       <span class="text-5xl mb-2 animate-bounce">🧺</span>
       <h3 class="text-lg font-black text-white mb-1">«Ловец Счастья»</h3>
@@ -631,7 +645,7 @@
 <!-- ═══════════════════════════════════════════════════════════
      МИНИ-ИГРА 1: «НАЙДИ ПАРУ» (MEMORY CARDS)
 ════════════════════════════════════════════════════════════════ -->
-<div id="memory-modal" class="fixed inset-0 z-50 bg-slate-950/90 backdrop-blur-md hidden flex-col justify-between p-3 select-none">
+<div id="memory-modal" class="fixed inset-0 z-50 bg-slate-950/90 backdrop-blur-md hidden flex-col justify-between p-2 sm:p-3 select-none overflow-hidden h-[100dvh]">
   <!-- Верхний бар игры -->
   <div class="flex items-center justify-between glass px-4 py-2.5 rounded-2xl shadow-lg border border-indigo-400/30">
     <div class="flex items-center gap-2">
@@ -649,7 +663,7 @@
 
   <!-- Игровое поле: сетка 4x3 из 12 карт -->
   <div class="relative flex-1 w-full my-2 flex items-center justify-center p-2 rounded-2xl bg-gradient-to-b from-indigo-950/70 via-purple-950/50 to-slate-950/80 border-2 border-indigo-400/20 shadow-inner overflow-hidden">
-    <div id="memory-grid" class="grid grid-cols-4 gap-2 w-full max-w-sm max-h-[380px] h-full">
+    <div id="memory-grid" class="grid grid-cols-4 gap-1.5 sm:gap-2 w-full max-w-sm max-h-[340px] sm:max-h-[380px] h-full items-center content-center">
       <!-- Генерируется динамически через JS -->
     </div>
 
@@ -677,7 +691,7 @@
 <!-- ═══════════════════════════════════════════════════════════
      МИНИ-ИГРА 2: «ЛОВЕЦ МОНЕТ И ЗВЁЗД» (FALLING CATCHER)
 ════════════════════════════════════════════════════════════════ -->
-<div id="coin-catcher-modal" class="fixed inset-0 z-50 bg-slate-950/90 backdrop-blur-md hidden flex-col justify-between p-3 select-none">
+<div id="coin-catcher-modal" class="fixed inset-0 z-50 bg-slate-950/90 backdrop-blur-md hidden flex-col justify-between p-2 sm:p-3 select-none overflow-hidden h-[100dvh]">
   <!-- Верхний бар игры -->
   <div class="flex items-center justify-between glass px-4 py-2.5 rounded-2xl shadow-lg border border-amber-400/30">
     <div class="flex items-center gap-1.5 text-xs font-black text-indigo-700">
@@ -699,7 +713,7 @@
 
   <!-- Холст игры HTML5 Canvas -->
   <div class="relative flex-1 w-full my-2 overflow-hidden rounded-2xl border-2 border-amber-400/20 shadow-inner bg-gradient-to-b from-amber-950/40 via-purple-950/50 to-slate-950/80">
-    <canvas id="coin-catcher-canvas" class="w-full h-full block"></canvas>
+    <canvas id="coin-catcher-canvas" class="block touch-none select-none"></canvas>
     
     <!-- Интро / Старт -->
     <div id="catcher-intro" class="absolute inset-0 flex flex-col items-center justify-center bg-black/60 p-4 text-center z-20">
@@ -765,12 +779,19 @@
 const $ = (id) => document.getElementById(id);
 
 // Telegram WebApp инициализация
+// Telegram WebApp инициализация и изоляция WebView
 if (window.Telegram && window.Telegram.WebApp) {
   try {
     window.Telegram.WebApp.ready();
     window.Telegram.WebApp.expand();
+    if (typeof window.Telegram.WebApp.setHeaderColor === 'function') {
+      window.Telegram.WebApp.setHeaderColor('#18181b');
+    }
+    if (typeof window.Telegram.WebApp.setBackgroundColor === 'function') {
+      window.Telegram.WebApp.setBackgroundColor('#18181b');
+    }
     if (typeof window.Telegram.WebApp.enableClosingConfirmation === 'function') {
-      window.Telegram.WebApp.enableClosingConfirmation();
+      window.Telegram.WebApp.enableClosingConfirmation(); // защита от случайного закрытия свайпом
     }
   } catch (e) {
     console.warn('[Telegram WebApp] Init warning:', e);
@@ -800,6 +821,38 @@ const VOICE_BANK = {
   kiss:   'static/voice/kiss.wav'
 };
 
+// Единый AudioContext для мобильных браузеров (iOS Safari / Telegram WebView)
+let sharedAudioCtx = null;
+function getAudioContext() {
+  if (!sharedAudioCtx) {
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    if (AudioCtx) {
+      sharedAudioCtx = new AudioCtx();
+    }
+  }
+  if (sharedAudioCtx && sharedAudioCtx.state === 'suspended') {
+    sharedAudioCtx.resume().catch(() => {});
+  }
+  return sharedAudioCtx;
+}
+
+// Разблокировка звука при первом пользовательском тапе/клике
+function unlockAudioOnFirstInteraction() {
+  const unlock = () => {
+    const ctx = getAudioContext();
+    if (ctx && ctx.state === 'suspended') {
+      ctx.resume().catch(() => {});
+    }
+    ['pointerdown', 'touchstart', 'click', 'keydown'].forEach(evt => {
+      window.removeEventListener(evt, unlock, { capture: true });
+    });
+  };
+  ['pointerdown', 'touchstart', 'click', 'keydown'].forEach(evt => {
+    window.addEventListener(evt, unlock, { capture: true, once: true, passive: true });
+  });
+}
+unlockAudioOnFirstInteraction();
+
 function playVoiceClip(name) {
   if (!isSoundOn) return;
   const path = VOICE_BANK[name];
@@ -814,7 +867,11 @@ function playVoiceClip(name) {
 function playSfx(type) {
   if (!isSoundOn) return;
   try {
-    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const ctx = getAudioContext();
+    if (!ctx) return;
+    if (ctx.state === 'suspended') {
+      ctx.resume().catch(() => {});
+    }
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
     osc.connect(gain);
@@ -1282,6 +1339,13 @@ function initThreeScene() {
   // 4. Подключаем слушатели
   setupInteractions();
   window.addEventListener('resize', onResize);
+  if (typeof coinCatcherModal !== 'undefined' && coinCatcherModal && !coinCatcherModal.classList.contains('hidden')) {
+    resizeCatcherCanvas();
+  }
+  if (typeof arcadeModal !== 'undefined' && arcadeModal && !arcadeModal.classList.contains('hidden')) {
+    resizeArcadeCanvas();
+  }
+
   requestAnimationFrame(animate);
 }
 
@@ -2789,7 +2853,7 @@ function setupFoodDrag() {
       dragElem.className = 'dragged-food-item';
       dragElem.innerText = item.emoji;
       dragElem.style.left = `${e.clientX}px`;
-      dragElem.style.top  = `${e.clientY}px`;
+      dragElem.style.top  = `${e.clientY - 38}px`; // Офсет 38px выше пальца, чтобы не закрывать еду
       dragElem.style.fontSize = '2.8rem';
       document.body.appendChild(dragElem);
 
@@ -2836,11 +2900,13 @@ function setupFoodDrag() {
 
   window.addEventListener('pointermove', (e) => {
     if (!isDraggingFood || !dragElem) return;
-    dragElem.style.left = `${e.clientX}px`;
-    dragElem.style.top  = `${e.clientY}px`;
+    const foodVisualX = e.clientX;
+    const foodVisualY = e.clientY - 38;
+    dragElem.style.left = `${foodVisualX}px`;
+    dragElem.style.top  = `${foodVisualY}px`;
 
     const mouth = getMouthScreenPos();
-    const dist = Math.hypot(e.clientX - mouth.x, e.clientY - mouth.y);
+    const dist = Math.hypot(foodVisualX - mouth.x, foodVisualY - mouth.y);
     if (dist < 140) {
       const openProgress = Math.min(1.0, Math.max(0.0, (140 - dist) / 90));
       dragElem.style.transform = `translate(-50%, -50%) scale(${1.0 + openProgress * 0.25})`;
@@ -2862,10 +2928,12 @@ function setupFoodDrag() {
     isDraggingFood = false;
     if (draggedFood?.btn) draggedFood.btn.style.opacity = '1';
 
+    const foodVisualX = e.clientX;
+    const foodVisualY = e.clientY - 38;
     const mouth = getMouthScreenPos();
-    const dist = Math.hypot(e.clientX - mouth.x, e.clientY - mouth.y);
+    const dist = Math.hypot(foodVisualX - mouth.x, foodVisualY - mouth.y);
     if (dist < 160) {
-      executeFeed(draggedFood.item, e.clientX, e.clientY, dragElem);
+      executeFeed(draggedFood.item, foodVisualX, foodVisualY, dragElem);
     } else {
       if (bones.jaw) gsap.to(bones.jaw.rotation, { x: 0, duration: 0.2 });
       if (characterMesh && characterMesh.morphTargetInfluences && morphMouthIndex !== -1) {
@@ -4031,9 +4099,15 @@ function openArcade() {
 
 function resizeArcadeCanvas() {
   if (!arcadeCanvas) return;
-  arcadeCanvas.width = arcadeCanvas.parentElement.clientWidth;
-  arcadeCanvas.height = arcadeCanvas.parentElement.clientHeight;
-  arcadeBasket.y = arcadeCanvas.height - 45;
+  const targetW = Math.floor(Math.min(window.innerWidth - 32, 420));
+  const targetH = Math.floor(Math.min(window.innerHeight * 0.65, 520));
+  arcadeCanvas.width = targetW;
+  arcadeCanvas.height = targetH;
+  arcadeCanvas.style.width = targetW + 'px';
+  arcadeCanvas.style.height = targetH + 'px';
+  arcadeBasket.w = Math.max(68, Math.min(84, targetW * 0.22));
+  arcadeBasket.h = 36;
+  arcadeBasket.y = arcadeCanvas.height - 48;
   arcadeBasket.x = arcadeCanvas.width / 2 - arcadeBasket.w / 2;
   arcadeCtx = arcadeCanvas.getContext('2d');
 }
@@ -4061,15 +4135,29 @@ function renderArcadeLives() {
   container.innerHTML = html;
 }
 
-const onArcadeDrag = (e) => {
-  if (!arcadeRunning) return;
+const updateArcadeBasketPosition = (clientX) => {
+  if (!arcadeCanvas) return;
   const rect = arcadeCanvas.getBoundingClientRect();
-  const clientX = e.touches ? e.touches[0].clientX : e.clientX;
   const x = clientX - rect.left;
   arcadeBasket.x = Math.max(0, Math.min(arcadeCanvas.width - arcadeBasket.w, x - arcadeBasket.w / 2));
 };
-arcadeCanvas.addEventListener('mousemove', onArcadeDrag);
-arcadeCanvas.addEventListener('touchmove', onArcadeDrag, { passive: true });
+
+arcadeCanvas?.addEventListener('pointerdown', (e) => {
+  if (!arcadeRunning) return;
+  try { arcadeCanvas.setPointerCapture?.(e.pointerId); } catch(_) {}
+  updateArcadeBasketPosition(e.clientX);
+});
+
+arcadeCanvas?.addEventListener('pointermove', (e) => {
+  if (!arcadeRunning) return;
+  updateArcadeBasketPosition(e.clientX);
+});
+
+const onArcadePointerEnd = (e) => {
+  try { arcadeCanvas?.releasePointerCapture?.(e.pointerId); } catch(_) {}
+};
+arcadeCanvas?.addEventListener('pointerup', onArcadePointerEnd);
+arcadeCanvas?.addEventListener('pointercancel', onArcadePointerEnd);
 
 function arcadeLoop() {
   if (!arcadeRunning) return;
@@ -4081,7 +4169,7 @@ function arcadeLoop() {
   if (now - arcadeLastSpawn > 650) {
     const itemType = FALLING_TYPES[Math.floor(Math.random() * FALLING_TYPES.length)];
     arcadeItems.push({
-      x: 20 + Math.random() * (arcadeCanvas.width - 50),
+      x: 26 + Math.random() * Math.max(10, arcadeCanvas.width - 52),
       y: -20,
       speed: 3.2 + Math.random() * 2.0 + (arcadeScore * 0.015),
       ...itemType
@@ -4252,7 +4340,7 @@ function startMemoryGame() {
 
   deck.forEach((symbol, index) => {
     const card = document.createElement('div');
-    card.className = 'memory-card w-full h-[76px] cursor-pointer select-none';
+    card.className = 'memory-card w-full h-[62px] sm:h-[76px] cursor-pointer select-none';
     card.dataset.symbol = symbol;
     card.dataset.index = index;
 
@@ -4410,9 +4498,15 @@ function openCoinCatcher() {
 
 function resizeCatcherCanvas() {
   if (!catcherCanvas) return;
-  catcherCanvas.width = catcherCanvas.parentElement.clientWidth;
-  catcherCanvas.height = catcherCanvas.parentElement.clientHeight;
-  catcherBasket.y = catcherCanvas.height - 45;
+  const targetW = Math.floor(Math.min(window.innerWidth - 32, 420));
+  const targetH = Math.floor(Math.min(window.innerHeight * 0.65, 520));
+  catcherCanvas.width = targetW;
+  catcherCanvas.height = targetH;
+  catcherCanvas.style.width = targetW + 'px';
+  catcherCanvas.style.height = targetH + 'px';
+  catcherBasket.w = Math.max(68, Math.min(84, targetW * 0.22));
+  catcherBasket.h = 36;
+  catcherBasket.y = catcherCanvas.height - 48;
   catcherBasket.x = catcherCanvas.width / 2 - catcherBasket.w / 2;
   catcherCtx = catcherCanvas.getContext('2d');
 }
@@ -4454,15 +4548,29 @@ function startCoinCatcherGame() {
   catcherLoop();
 }
 
-const onCatcherDrag = (e) => {
-  if (!catcherRunning) return;
+const updateCatcherBasketPosition = (clientX) => {
+  if (!catcherCanvas) return;
   const rect = catcherCanvas.getBoundingClientRect();
-  const clientX = e.touches ? e.touches[0].clientX : e.clientX;
   const x = clientX - rect.left;
   catcherBasket.x = Math.max(0, Math.min(catcherCanvas.width - catcherBasket.w, x - catcherBasket.w / 2));
 };
-catcherCanvas?.addEventListener('mousemove', onCatcherDrag);
-catcherCanvas?.addEventListener('touchmove', onCatcherDrag, { passive: true });
+
+catcherCanvas?.addEventListener('pointerdown', (e) => {
+  if (!catcherRunning) return;
+  try { catcherCanvas.setPointerCapture?.(e.pointerId); } catch(_) {}
+  updateCatcherBasketPosition(e.clientX);
+});
+
+catcherCanvas?.addEventListener('pointermove', (e) => {
+  if (!catcherRunning) return;
+  updateCatcherBasketPosition(e.clientX);
+});
+
+const onCatcherPointerEnd = (e) => {
+  try { catcherCanvas?.releasePointerCapture?.(e.pointerId); } catch(_) {}
+};
+catcherCanvas?.addEventListener('pointerup', onCatcherPointerEnd);
+catcherCanvas?.addEventListener('pointercancel', onCatcherPointerEnd);
 
 function catcherLoop() {
   if (!catcherRunning) return;
@@ -4485,7 +4593,7 @@ function catcherLoop() {
     }
     const itemType = pool[Math.floor(Math.random() * pool.length)];
     catcherItems.push({
-      x: 25 + Math.random() * (catcherCanvas.width - 50),
+      x: 26 + Math.random() * Math.max(10, catcherCanvas.width - 52),
       y: -20,
       ...itemType
     });
