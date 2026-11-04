@@ -3,7 +3,7 @@
 <head>
   <!-- Принудительный сброс устаревшего кэша браузера -->
   <script>
-    const APP_BUILD_VER = '20261104-v9-tg-push-deeplink';
+    const APP_BUILD_VER = '20261104-v10-restore-reference-skirt';
     if (localStorage.getItem('tamagotchi_build_ver') !== APP_BUILD_VER) {
       localStorage.setItem('tamagotchi_build_ver', APP_BUILD_VER);
       if ('caches' in window) {
@@ -2320,11 +2320,22 @@ function updateDirtSpots(hygienePercent = petState.hygiene) {
 // Оригинальная модель girl.glb содержит полную эталонную геометрию:
 // волосы, лицо, бомбер, юбку, ноги и обувь. Процедурные наложения юбки и ног отключены.
 function buildCharacterSkirt() {
-  return null;
+  const skirtGeo = new THREE.CylinderGeometry(0.108, 0.146, 0.142, 32, 1, false);
+  const skirtMat = new THREE.MeshStandardMaterial({
+    color: 0x3c4c5c,
+    roughness: 0.88,
+    metalness: 0.02
+  });
+  const skirt = new THREE.Mesh(skirtGeo, skirtMat);
+  skirt.position.set(0, 0.452, 0);
+  skirt.castShadow = true;
+  skirt.receiveShadow = true;
+  skirt.name = 'characterLegs';
+  return skirt;
 }
 
 function buildCharacterLegs() {
-  return null;
+  return buildCharacterSkirt();
 }
 
 // ─── ЗАГРУЗКА GIRL.GLB + СОХРАНЕНИЕ ОРИГИНАЛЬНЫХ МАТЕРИАЛОВ И АНИМАЦИИ ───────
@@ -2473,8 +2484,11 @@ function loadCharacterModel() {
         }
       }
       console.log('--- SKELETON BONES FOUND IN GIRL.GLB ---', Object.keys(bones).filter(k => bones[k]));
-      characterLegs = null;
-      window.characterLegs = null;
+      characterLegs = buildCharacterSkirt();
+      if (characterLegs) {
+        charGroup.add(characterLegs);
+        window.characterLegs = characterLegs;
+      }
 
       dirtGroup = buildCharacterDirt();
       charGroup.add(dirtGroup);
