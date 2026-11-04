@@ -3,7 +3,7 @@
 <head>
   <!-- Принудительный сброс устаревшего кэша браузера -->
   <script>
-    const APP_BUILD_VER = '20261104-v6-pristine';
+    const APP_BUILD_VER = '20261104-v7-market-games';
     if (localStorage.getItem('tamagotchi_build_ver') !== APP_BUILD_VER) {
       localStorage.setItem('tamagotchi_build_ver', APP_BUILD_VER);
       if ('caches' in window) {
@@ -160,6 +160,35 @@
       font-size: 42px;
       filter: drop-shadow(0 8px 16px rgba(0,0,0,0.3));
     }
+    /* Card Flip for Memory Game */
+    .memory-card {
+      perspective: 1000px;
+    }
+    .memory-card-inner {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      text-align: center;
+      transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+      transform-style: preserve-3d;
+    }
+    .memory-card.is-flipped .memory-card-inner {
+      transform: rotateY(180deg);
+    }
+    .memory-card-front, .memory-card-back {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      -webkit-backface-visibility: hidden;
+      backface-visibility: hidden;
+      border-radius: 1rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .memory-card-back {
+      transform: rotateY(180deg);
+    }
   </style>
 </head>
 <body class="flex flex-col select-none">
@@ -252,41 +281,92 @@
         <span class="text-lg">🥰</span>
         <span>Пощекотать</span>
       </button>
-      <button id="btn-start-arcade" type="button" class="flex items-center justify-center gap-1.5 py-3 px-3 rounded-xl bg-gradient-to-r from-pink-500 to-rose-500 text-white font-black text-xs shadow-md active:scale-95 transition-all">
-        <span class="text-lg">🎁</span>
-        <span>«Ловец Счастья»</span>
+      <button id="btn-start-arcade" type="button" class="flex items-center justify-center gap-1.5 py-3 px-3 rounded-xl bg-gradient-to-r from-pink-500 via-purple-500 to-indigo-500 text-white font-black text-xs shadow-md active:scale-95 transition-all cursor-pointer">
+        <span class="text-lg">🎮</span>
+        <span>Игровой Клуб</span>
       </button>
     </div>
   </div>
 
-  <!-- B. КУХНЯ: Выдвижная тарелка с едой для кормления -->
+  <!-- B. КУХНЯ: Платный Маркет Еды (6 сбалансированных блюд) -->
   <div id="shelf-kitchen" class="room-shelf hidden glass rounded-2xl p-2.5 shadow-md space-y-2">
     <div class="flex items-center justify-between px-1">
       <span class="text-[11px] font-black uppercase tracking-wider text-orange-600 flex items-center gap-1">
-        <span>🍕</span> Обеденный стол
+        <span>🍽️</span> Меню Обеденного Стола
       </span>
       <span class="text-[10px] text-gray-500 font-medium">Перетащи еду прямо в рот!</span>
     </div>
-    <div class="grid grid-cols-5 gap-1.5" id="food-plate">
-      <button type="button" class="btn-food flex flex-col items-center p-1.5 rounded-xl bg-white/95 border border-orange-200 active:scale-95 transition-all shadow-xs" data-food="pizza" data-gain="25" data-emoji="🍕">
-        <span class="text-2xl">🍕</span>
-        <span class="text-[9px] font-extrabold text-orange-600">+25%</span>
+    <div class="grid grid-cols-3 gap-1.5" id="food-plate">
+      <!-- 🥐 Круассан — 8 🪙 -->
+      <button type="button" class="btn-food flex flex-col items-center p-1.5 rounded-xl bg-white/95 border border-amber-200 active:scale-95 transition-all shadow-xs relative overflow-hidden text-center cursor-pointer select-none" data-food="croissant">
+        <span class="text-2xl mb-0.5">🥐</span>
+        <span class="text-[10px] font-black text-gray-800 leading-tight">Круассан</span>
+        <div class="flex items-center justify-center gap-0.5 my-0.5 bg-amber-100 text-amber-900 border border-amber-300 rounded-full px-1.5 py-0.2 text-[9px] font-black w-full max-w-[54px]">
+          <span>8</span> <span>🪙</span>
+        </div>
+        <div class="text-[8px] font-black text-amber-700 leading-tight">
+          +15% 🍖 +5% 🎮
+        </div>
       </button>
-      <button type="button" class="btn-food flex flex-col items-center p-1.5 rounded-xl bg-white/95 border border-orange-200 active:scale-95 transition-all shadow-xs" data-food="croissant" data-gain="20" data-emoji="🥐">
-        <span class="text-2xl">🥐</span>
-        <span class="text-[9px] font-extrabold text-amber-600">+20%</span>
+
+      <!-- 🍉 Свежий арбуз — 15 🪙 -->
+      <button type="button" class="btn-food flex flex-col items-center p-1.5 rounded-xl bg-white/95 border border-emerald-200 active:scale-95 transition-all shadow-xs relative overflow-hidden text-center cursor-pointer select-none" data-food="watermelon">
+        <span class="text-2xl mb-0.5">🍉</span>
+        <span class="text-[10px] font-black text-gray-800 leading-tight">Арбуз</span>
+        <div class="flex items-center justify-center gap-0.5 my-0.5 bg-amber-100 text-amber-900 border border-amber-300 rounded-full px-1.5 py-0.2 text-[9px] font-black w-full max-w-[54px]">
+          <span>15</span> <span>🪙</span>
+        </div>
+        <div class="text-[8px] font-black text-emerald-700 leading-tight">
+          +20% 🍖 +10% 🧼
+        </div>
       </button>
-      <button type="button" class="btn-food flex flex-col items-center p-1.5 rounded-xl bg-white/95 border border-orange-200 active:scale-95 transition-all shadow-xs" data-food="cake" data-gain="30" data-emoji="🍰">
-        <span class="text-2xl">🍰</span>
-        <span class="text-[9px] font-extrabold text-pink-600">+30%</span>
+
+      <!-- 🍕 Пепперони — 25 🪙 -->
+      <button type="button" class="btn-food flex flex-col items-center p-1.5 rounded-xl bg-white/95 border border-orange-200 active:scale-95 transition-all shadow-xs relative overflow-hidden text-center cursor-pointer select-none" data-food="pizza">
+        <span class="text-2xl mb-0.5">🍕</span>
+        <span class="text-[10px] font-black text-gray-800 leading-tight">Пепперони</span>
+        <div class="flex items-center justify-center gap-0.5 my-0.5 bg-amber-100 text-amber-900 border border-amber-300 rounded-full px-1.5 py-0.2 text-[9px] font-black w-full max-w-[54px]">
+          <span>25</span> <span>🪙</span>
+        </div>
+        <div class="text-[8px] font-black text-orange-700 leading-tight">
+          +30% 🍖 +15% 🎮
+        </div>
       </button>
-      <button type="button" class="btn-food flex flex-col items-center p-1.5 rounded-xl bg-white/95 border border-orange-200 active:scale-95 transition-all shadow-xs" data-food="coffee" data-gain="10" data-emoji="☕">
-        <span class="text-2xl">☕</span>
-        <span class="text-[9px] font-extrabold text-amber-700">+⚡10%</span>
+
+      <!-- 🍰 Клубничный торт — 45 🪙 -->
+      <button type="button" class="btn-food flex flex-col items-center p-1.5 rounded-xl bg-white/95 border border-pink-200 active:scale-95 transition-all shadow-xs relative overflow-hidden text-center cursor-pointer select-none" data-food="cake">
+        <span class="text-2xl mb-0.5">🍰</span>
+        <span class="text-[10px] font-black text-gray-800 leading-tight">Торт</span>
+        <div class="flex items-center justify-center gap-0.5 my-0.5 bg-amber-100 text-amber-900 border border-amber-300 rounded-full px-1.5 py-0.2 text-[9px] font-black w-full max-w-[54px]">
+          <span>45</span> <span>🪙</span>
+        </div>
+        <div class="text-[8px] font-black text-pink-700 leading-tight">
+          +40% 🍖 +25% 🎮
+        </div>
       </button>
-      <button type="button" class="btn-food flex flex-col items-center p-1.5 rounded-xl bg-white/95 border border-orange-200 active:scale-95 transition-all shadow-xs" data-food="watermelon" data-gain="15" data-emoji="🍉">
-        <span class="text-2xl">🍉</span>
-        <span class="text-[9px] font-extrabold text-emerald-600">+15%</span>
+
+      <!-- ☕ Крепкий кофе — 60 🪙 -->
+      <button type="button" class="btn-food flex flex-col items-center p-1.5 rounded-xl bg-white/95 border border-amber-300 active:scale-95 transition-all shadow-xs relative overflow-hidden text-center cursor-pointer select-none" data-food="coffee">
+        <span class="text-2xl mb-0.5">☕</span>
+        <span class="text-[10px] font-black text-gray-800 leading-tight">Кофе</span>
+        <div class="flex items-center justify-center gap-0.5 my-0.5 bg-amber-100 text-amber-900 border border-amber-300 rounded-full px-1.5 py-0.2 text-[9px] font-black w-full max-w-[54px]">
+          <span>60</span> <span>🪙</span>
+        </div>
+        <div class="text-[8px] font-black text-amber-800 leading-tight">
+          +15% 🍖 +45% ⚡
+        </div>
+      </button>
+
+      <!-- 🍣 Суши-сет — 90 🪙 -->
+      <button type="button" class="btn-food flex flex-col items-center p-1.5 rounded-xl bg-white/95 border border-rose-200 active:scale-95 transition-all shadow-xs relative overflow-hidden text-center cursor-pointer select-none" data-food="sushi">
+        <span class="text-2xl mb-0.5">🍣</span>
+        <span class="text-[10px] font-black text-gray-800 leading-tight">Суши-сет</span>
+        <div class="flex items-center justify-center gap-0.5 my-0.5 bg-amber-100 text-amber-900 border border-amber-300 rounded-full px-1.5 py-0.2 text-[9px] font-black w-full max-w-[54px]">
+          <span>90</span> <span>🪙</span>
+        </div>
+        <div class="text-[8px] font-black text-rose-700 leading-tight">
+          +60% 🍖 +35% 🎮
+        </div>
       </button>
     </div>
   </div>
@@ -477,6 +557,193 @@
   </div>
 </div>
 
+<!-- ═══════════════════════════════════════════════════════════
+     МЕНЮ ВЫБОРА МИНИ-ИГР «ИГРОВОЙ КЛУБ ЛЁЛИ»
+════════════════════════════════════════════════════════════════ -->
+<div id="games-modal" class="fixed inset-0 z-50 bg-black/75 backdrop-blur-md hidden items-center justify-center p-3 select-none">
+  <div class="bg-gradient-to-b from-slate-900 to-purple-950 rounded-3xl p-5 max-w-sm w-full shadow-2xl space-y-4 border-2 border-purple-400/40 text-white relative">
+    <div class="flex items-center justify-between border-b border-purple-500/30 pb-3">
+      <div class="flex items-center gap-2">
+        <span class="text-2xl">🎮</span>
+        <div>
+          <h3 class="text-sm font-black text-purple-200">Игровой Клуб Лёли</h3>
+          <p class="text-[10px] text-purple-300 font-medium">Зарабатывай монетки и радуй подругу!</p>
+        </div>
+      </div>
+      <button id="btn-close-games" type="button" class="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center font-bold text-lg text-purple-200 active:scale-95 cursor-pointer">&times;</button>
+    </div>
+
+    <div class="space-y-2.5">
+      <!-- Игра 1: Ловец Счастья -->
+      <div class="p-3 rounded-2xl bg-white/5 border border-purple-300/20 hover:border-pink-400/50 transition-all flex items-center justify-between gap-3">
+        <div class="flex items-center gap-3">
+          <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-pink-500 to-rose-600 flex items-center justify-center text-2xl shadow-md">
+            🧺
+          </div>
+          <div>
+            <div class="text-xs font-black text-white">«Ловец Счастья»</div>
+            <div class="text-[10px] text-pink-200 font-medium">Лови подарки и сладости</div>
+            <div class="text-[9px] text-amber-300 font-extrabold mt-0.5">Награда: 🪙 монеты + радость</div>
+          </div>
+        </div>
+        <button id="btn-choice-arcade" type="button" class="py-2 px-3.5 rounded-xl bg-gradient-to-r from-pink-500 to-rose-500 text-white text-xs font-black active:scale-95 shadow-md cursor-pointer">
+          Играть
+        </button>
+      </div>
+
+      <!-- Игра 2: Найди Пару (Memory Cards) -->
+      <div class="p-3 rounded-2xl bg-white/5 border border-purple-300/20 hover:border-indigo-400/50 transition-all flex items-center justify-between gap-3">
+        <div class="flex items-center gap-3">
+          <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-2xl shadow-md">
+            🎴
+          </div>
+          <div>
+            <div class="text-xs font-black text-white">«Найди Пару» (Memory)</div>
+            <div class="text-[10px] text-indigo-200 font-medium">Сетка 4x3. Открой пары за 40с!</div>
+            <div class="text-[9px] text-amber-300 font-extrabold mt-0.5">Награда: 25–50 🪙 + 20% веселья</div>
+          </div>
+        </div>
+        <button id="btn-choice-memory" type="button" class="py-2 px-3.5 rounded-xl bg-gradient-to-r from-indigo-500 to-purple-500 text-white text-xs font-black active:scale-95 shadow-md cursor-pointer">
+          Играть
+        </button>
+      </div>
+
+      <!-- Игра 3: Ловец Монет и Звёзд -->
+      <div class="p-3 rounded-2xl bg-white/5 border border-purple-300/20 hover:border-amber-400/50 transition-all flex items-center justify-between gap-3">
+        <div class="flex items-center gap-3">
+          <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center text-2xl shadow-md">
+            ⭐
+          </div>
+          <div>
+            <div class="text-xs font-black text-white">«Ловец Монет и Звёзд»</div>
+            <div class="text-[10px] text-amber-200 font-medium">Лови 🪙 и ⭐, уворачивайся от 💣</div>
+            <div class="text-[9px] text-amber-300 font-extrabold mt-0.5">Награда: все монеты в банк!</div>
+          </div>
+        </div>
+        <button id="btn-choice-catcher" type="button" class="py-2 px-3.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 text-white text-xs font-black active:scale-95 shadow-md cursor-pointer">
+          Играть
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════
+     МИНИ-ИГРА 1: «НАЙДИ ПАРУ» (MEMORY CARDS)
+════════════════════════════════════════════════════════════════ -->
+<div id="memory-modal" class="fixed inset-0 z-50 bg-slate-950/90 backdrop-blur-md hidden flex-col justify-between p-3 select-none">
+  <!-- Верхний бар игры -->
+  <div class="flex items-center justify-between glass px-4 py-2.5 rounded-2xl shadow-lg border border-indigo-400/30">
+    <div class="flex items-center gap-2">
+      <span class="text-lg">⏰</span>
+      <span id="memory-timer" class="text-sm font-black text-indigo-700">40с</span>
+    </div>
+    <div class="flex items-center gap-1.5 text-xs font-black text-pink-700">
+      <span>Пар:</span>
+      <span id="memory-pairs" class="text-base text-rose-600">0 / 6</span>
+    </div>
+    <button id="btn-close-memory" type="button" class="bg-rose-500 text-white text-[10px] font-black px-3 py-1.5 rounded-xl shadow-xs active:scale-95 cursor-pointer">
+      Выход
+    </button>
+  </div>
+
+  <!-- Игровое поле: сетка 4x3 из 12 карт -->
+  <div class="relative flex-1 w-full my-2 flex items-center justify-center p-2 rounded-2xl bg-gradient-to-b from-indigo-950/70 via-purple-950/50 to-slate-950/80 border-2 border-indigo-400/20 shadow-inner overflow-hidden">
+    <div id="memory-grid" class="grid grid-cols-4 gap-2 w-full max-w-sm max-h-[380px] h-full">
+      <!-- Генерируется динамически через JS -->
+    </div>
+
+    <!-- Оверлей победы/поражения -->
+    <div id="memory-result-overlay" class="absolute inset-0 bg-black/75 backdrop-blur-md hidden flex-col items-center justify-center p-6 text-center space-y-3 z-30">
+      <div id="memory-result-icon" class="text-5xl animate-bounce">🎉</div>
+      <h3 id="memory-result-title" class="text-lg font-black text-white">Победа!</h3>
+      <p id="memory-result-desc" class="text-xs text-purple-200 max-w-xs leading-relaxed">Ты нашел все пары!</p>
+      <div class="flex items-center gap-3 pt-2">
+        <button id="btn-memory-replay" type="button" class="px-5 py-2.5 rounded-2xl bg-gradient-to-r from-indigo-500 to-purple-600 text-white text-xs font-black shadow-lg active:scale-95 cursor-pointer">
+          Сыграть ещё 🔄
+        </button>
+        <button id="btn-memory-exit" type="button" class="px-5 py-2.5 rounded-2xl bg-white/20 text-white text-xs font-bold active:scale-95 cursor-pointer">
+          В гостиную
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <div class="text-center text-[11px] text-indigo-200 font-bold py-0.5">
+    Переворачивай карты по две и ищи одинаковые символы! 🍓🐱🌸
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════
+     МИНИ-ИГРА 2: «ЛОВЕЦ МОНЕТ И ЗВЁЗД» (FALLING CATCHER)
+════════════════════════════════════════════════════════════════ -->
+<div id="coin-catcher-modal" class="fixed inset-0 z-50 bg-slate-950/90 backdrop-blur-md hidden flex-col justify-between p-3 select-none">
+  <!-- Верхний бар игры -->
+  <div class="flex items-center justify-between glass px-4 py-2.5 rounded-2xl shadow-lg border border-amber-400/30">
+    <div class="flex items-center gap-1.5 text-xs font-black text-indigo-700">
+      <span>⏰</span>
+      <span id="catcher-timer" class="text-sm font-black text-indigo-700">30с</span>
+    </div>
+    <div class="flex items-center gap-1 text-xs font-black text-amber-600 bg-amber-50 px-2.5 py-1 rounded-xl border border-amber-200">
+      <span>🪙</span>
+      <span id="catcher-coins" class="text-sm font-black">0</span>
+    </div>
+    <div class="flex items-center gap-1 text-xs font-black text-purple-700">
+      <span>⭐</span>
+      <span id="catcher-stars" class="text-sm font-black">0</span>
+    </div>
+    <button id="btn-close-catcher" type="button" class="bg-rose-500 text-white text-[10px] font-black px-3 py-1.5 rounded-xl shadow-xs active:scale-95 cursor-pointer">
+      Выход
+    </button>
+  </div>
+
+  <!-- Холст игры HTML5 Canvas -->
+  <div class="relative flex-1 w-full my-2 overflow-hidden rounded-2xl border-2 border-amber-400/20 shadow-inner bg-gradient-to-b from-amber-950/40 via-purple-950/50 to-slate-950/80">
+    <canvas id="coin-catcher-canvas" class="w-full h-full block"></canvas>
+    
+    <!-- Интро / Старт -->
+    <div id="catcher-intro" class="absolute inset-0 flex flex-col items-center justify-center bg-black/60 p-4 text-center z-20">
+      <span class="text-5xl mb-2 animate-bounce">⭐</span>
+      <h3 class="text-lg font-black text-white mb-1">«Ловец Монет и Звёзд»</h3>
+      <p class="text-xs text-amber-200 max-w-xs mb-3">
+        Лови 🪙 (+2 монеты), ⭐ (+10 очков и френзи) и 💖 (+5% настроения)!<br>
+        <span class="text-rose-400 font-bold">Опасайся тучек 💣 (-4 сек)!</span>
+      </p>
+      <button id="btn-start-catcher-now" class="bg-gradient-to-r from-amber-500 to-orange-500 text-white font-black text-sm px-6 py-2.5 rounded-2xl shadow-lg active:scale-95 animate-pulse cursor-pointer">
+        ПОЕХАЛИ! 🚀
+      </button>
+    </div>
+
+    <!-- Финал раунда -->
+    <div id="catcher-result-overlay" class="absolute inset-0 bg-black/80 backdrop-blur-md hidden flex-col items-center justify-center p-6 text-center space-y-3 z-30">
+      <div class="text-5xl animate-bounce">🪙✨</div>
+      <h3 class="text-lg font-black text-white">Раунд завершён!</h3>
+      <div class="bg-white/10 rounded-2xl p-3 border border-white/10 w-full max-w-xs space-y-1.5 text-xs">
+        <div class="flex justify-between items-center text-amber-300 font-bold">
+          <span>Собрано монет:</span>
+          <span id="catcher-final-coins" class="text-sm font-black">+0 🪙</span>
+        </div>
+        <div class="flex justify-between items-center text-purple-300 font-bold">
+          <span>Очки звёзд:</span>
+          <span id="catcher-final-stars" class="text-sm font-black">0 ⭐</span>
+        </div>
+      </div>
+      <div class="flex items-center gap-3 pt-2">
+        <button id="btn-catcher-replay" type="button" class="px-5 py-2.5 rounded-2xl bg-gradient-to-r from-amber-500 to-orange-600 text-white text-xs font-black shadow-lg active:scale-95 cursor-pointer">
+          Ещё раунд 🔄
+        </button>
+        <button id="btn-catcher-exit" type="button" class="px-5 py-2.5 rounded-2xl bg-white/20 text-white text-xs font-bold active:scale-95 cursor-pointer">
+          В гостиную
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <div class="text-center text-[11px] text-amber-200 font-bold py-0.5">
+    Веди пальцем внизу экрана, управляя корзинкой! 🪙
+  </div>
+</div>
+
 <!-- Экран первоначальной загрузки 3D -->
 <div id="loading" class="fixed inset-0 z-50 bg-gradient-to-b from-pink-100 via-purple-50 to-pink-200 flex flex-col items-center justify-center p-6 text-center transition-opacity duration-500">
   <div class="relative w-20 h-20 mb-4 flex items-center justify-center">
@@ -597,6 +864,35 @@ function playSfx(type) {
         g.gain.exponentialRampToValueAtTime(0.001, now + i * 0.09 + 0.25);
         o.start(now + i * 0.09); o.stop(now + i * 0.09 + 0.25);
       });
+    } else if (type === 'coin') {
+      [987.77, 1318.51].forEach((freq, i) => {
+        const o = ctx.createOscillator();
+        const g = ctx.createGain();
+        o.connect(g); g.connect(ctx.destination);
+        o.type = 'sine';
+        o.frequency.value = freq;
+        g.gain.setValueAtTime(0.2, now + i * 0.08);
+        g.gain.exponentialRampToValueAtTime(0.001, now + i * 0.08 + 0.2);
+        o.start(now + i * 0.08); o.stop(now + i * 0.08 + 0.2);
+      });
+    } else if (type === 'buzz') {
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(160, now);
+      osc.frequency.linearRampToValueAtTime(100, now + 0.16);
+      gain.gain.setValueAtTime(0.25, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.16);
+      osc.start(now); osc.stop(now + 0.16);
+    } else if (type === 'match') {
+      [659.25, 880, 1046.5].forEach((freq, i) => {
+        const o = ctx.createOscillator();
+        const g = ctx.createGain();
+        o.connect(g); g.connect(ctx.destination);
+        o.type = 'triangle';
+        o.frequency.value = freq;
+        g.gain.setValueAtTime(0.18, now + i * 0.07);
+        g.gain.exponentialRampToValueAtTime(0.001, now + i * 0.07 + 0.22);
+        o.start(now + i * 0.07); o.stop(now + i * 0.07 + 0.22);
+      });
     }
   } catch(_) {}
 }
@@ -618,6 +914,91 @@ const petState = {
   lastUpdate: Date.now()
 };
 
+window.showToast = function(message, type = 'info') {
+  let toastContainer = $('global-toast-container');
+  if (!toastContainer) {
+    toastContainer = document.createElement('div');
+    toastContainer.id = 'global-toast-container';
+    toastContainer.className = 'fixed top-14 left-1/2 -translate-x-1/2 z-50 flex flex-col items-center pointer-events-none w-11/12 max-w-sm space-y-2';
+    document.body.appendChild(toastContainer);
+  }
+
+  const toast = document.createElement('div');
+  toast.className = 'pointer-events-auto flex items-center justify-center gap-2 px-4 py-2.5 rounded-2xl shadow-xl text-xs font-black backdrop-blur-md transition-all text-center';
+  if (type === 'error' || type === 'warning') {
+    toast.className += ' bg-rose-950/90 text-rose-100 border border-rose-400/60 shadow-rose-900/40';
+  } else {
+    toast.className += ' bg-slate-900/90 text-white border border-white/25 shadow-black/50';
+  }
+  toast.innerText = message;
+  toastContainer.appendChild(toast);
+
+  gsap.fromTo(toast,
+    { y: -20, opacity: 0, scale: 0.9 },
+    { y: 0, opacity: 1, scale: 1, duration: 0.3, ease: 'back.out(1.7)' }
+  );
+
+  setTimeout(() => {
+    gsap.to(toast, {
+      y: -15, opacity: 0, scale: 0.9, duration: 0.3, ease: 'power2.in',
+      onComplete: () => toast.remove()
+    });
+  }, 2700);
+};
+
+window.updateCoins = function(delta) {
+  const currentCoins = parseInt(localStorage.getItem('tamagotchi_coins') || petState.coins || 100, 10);
+  const targetCoins = Math.max(0, currentCoins + delta);
+  petState.coins = targetCoins;
+  localStorage.setItem('tamagotchi_coins', targetCoins);
+  saveState();
+
+  // Всплывающий бейдж изменения монет возле баланса
+  const hudBtn = $('btn-open-shop') || $('hud-coins');
+  if (hudBtn) {
+    const rect = hudBtn.getBoundingClientRect();
+    const badge = document.createElement('div');
+    badge.className = 'fixed font-black text-xs px-2.5 py-0.5 rounded-full z-50 pointer-events-none shadow-lg backdrop-blur-md';
+    if (delta > 0) {
+      badge.innerText = `+${delta} 🪙`;
+      badge.style.background = 'rgba(34, 197, 94, 0.95)';
+      badge.style.color = '#ffffff';
+      badge.style.border = '1px solid rgba(255, 255, 255, 0.7)';
+    } else {
+      badge.innerText = `${delta} 🪙`;
+      badge.style.background = 'rgba(239, 68, 68, 0.95)';
+      badge.style.color = '#ffffff';
+      badge.style.border = '1px solid rgba(255, 255, 255, 0.7)';
+    }
+    badge.style.left = `${rect.left + rect.width / 2}px`;
+    badge.style.top = `${rect.bottom + 6}px`;
+    badge.style.transform = 'translate(-50%, 0)';
+    document.body.appendChild(badge);
+
+    gsap.fromTo(badge,
+      { y: 0, opacity: 1, scale: 0.8 },
+      { y: delta > 0 ? 28 : 28, opacity: 0, scale: 1.2, duration: 1.4, ease: 'power2.out', onComplete: () => badge.remove() }
+    );
+  }
+
+  // Плавная анимация прокрутки счетчика в шапке
+  const hudText = $('hud-coins');
+  if (hudText) {
+    const counterObj = { val: currentCoins };
+    gsap.to(counterObj, {
+      val: targetCoins,
+      duration: 0.6,
+      ease: 'power2.out',
+      onUpdate: () => {
+        hudText.innerText = Math.round(counterObj.val);
+      }
+    });
+  }
+
+  if (delta > 0) playSfx('coin');
+  return targetCoins;
+};
+
 function loadState() {
   try {
     const raw = localStorage.getItem('tamagotchi_lelya_tom_v2');
@@ -626,6 +1007,13 @@ function loadState() {
       Object.assign(petState, parsed);
     }
   } catch(_) {}
+  const savedCoins = localStorage.getItem('tamagotchi_coins');
+  if (savedCoins !== null && !isNaN(parseInt(savedCoins, 10))) {
+    petState.coins = parseInt(savedCoins, 10);
+  } else {
+    petState.coins = petState.coins || 100;
+    localStorage.setItem('tamagotchi_coins', petState.coins);
+  }
   applyDegradation();
   updateHUD();
 }
@@ -634,6 +1022,7 @@ function saveState() {
   petState.lastUpdate = Date.now();
   try {
     localStorage.setItem('tamagotchi_lelya_tom_v2', JSON.stringify(petState));
+    localStorage.setItem('tamagotchi_coins', petState.coins);
   } catch(_) {}
   updateHUD();
 }
@@ -2293,26 +2682,112 @@ function getMouthScreenPos() {
   return { x: mouthX, y: mouthY };
 }
 
+const FOOD_MENU = {
+  croissant: {
+    id: 'croissant',
+    name: 'Круассан',
+    cost: 8,
+    emoji: '🥐',
+    color: 0xd97706,
+    hunger: 15,
+    fun: 5,
+    energy: 0,
+    hygiene: 0
+  },
+  watermelon: {
+    id: 'watermelon',
+    name: 'Свежий арбуз',
+    cost: 15,
+    emoji: '🍉',
+    color: 0xef4444,
+    hunger: 20,
+    fun: 0,
+    energy: 0,
+    hygiene: 10
+  },
+  pizza: {
+    id: 'pizza',
+    name: 'Пепперони',
+    cost: 25,
+    emoji: '🍕',
+    color: 0xf59e0b,
+    hunger: 30,
+    fun: 15,
+    energy: 0,
+    hygiene: 0
+  },
+  cake: {
+    id: 'cake',
+    name: 'Клубничный торт',
+    cost: 45,
+    emoji: '🍰',
+    color: 0xf472b6,
+    hunger: 40,
+    fun: 25,
+    energy: 0,
+    hygiene: 0
+  },
+  coffee: {
+    id: 'coffee',
+    name: 'Крепкий кофе',
+    cost: 60,
+    emoji: '☕',
+    color: 0x78350f,
+    hunger: 15,
+    fun: 0,
+    energy: 45,
+    hygiene: 0
+  },
+  sushi: {
+    id: 'sushi',
+    name: 'Суши-сет',
+    cost: 90,
+    emoji: '🍣',
+    color: 0xf43f5e,
+    hunger: 60,
+    fun: 35,
+    energy: 10,
+    hygiene: 0
+  }
+};
+
 function setupFoodDrag() {
   document.querySelectorAll('.btn-food').forEach(btn => {
     btn.addEventListener('pointerdown', (e) => {
       if (currentRoom !== 'kitchen') return;
-      const food = btn.dataset.food;
-      const gain = parseFloat(btn.dataset.gain) || 25;
-      const emoji = btn.dataset.emoji || '🍕';
+      const foodId = btn.dataset.food;
+      const item = FOOD_MENU[foodId];
+      if (!item) return;
 
-      if (petState.hunger >= 100 && food !== 'coffee') {
+      // 1. Проверка достаточности монет
+      if (petState.coins < item.cost) {
+        safeHaptic('warning');
+        playSfx('buzz');
+        btn.classList.add('border-rose-500', 'bg-rose-50');
+        gsap.fromTo(btn, { x: -6 }, {
+          x: 6, duration: 0.08, repeat: 3, yoyo: true,
+          onComplete: () => {
+            btn.classList.remove('border-rose-500', 'bg-rose-50');
+            btn.style.transform = '';
+          }
+        });
+        showToast('Недостаточно монет! Загляни в гостиную и заработай в мини-играх 🎮', 'warning');
+        updateSpeech('У нас не хватает монеток на это блюдо! Давай поиграем в гостиной? 🎮🪙');
+        return;
+      }
+
+      if (petState.hunger >= 100 && item.energy === 0) {
         safeHaptic('warning');
         updateSpeech('Я наелась, больше не влезает! 😋');
         return;
       }
 
       isDraggingFood = true;
-      draggedFood = { food, gain, emoji, btn };
+      draggedFood = { food: foodId, item, btn };
 
       dragElem = document.createElement('div');
       dragElem.className = 'dragged-food-item';
-      dragElem.innerText = emoji;
+      dragElem.innerText = item.emoji;
       dragElem.style.left = `${e.clientX}px`;
       dragElem.style.top  = `${e.clientY}px`;
       dragElem.style.fontSize = '2.8rem';
@@ -2328,17 +2803,34 @@ function setupFoodDrag() {
     // Резервный клик: мгновенный полет ко рту если не перетаскивали
     btn.addEventListener('click', (e) => {
       if (isDraggingFood) return;
-      const food = btn.dataset.food;
-      const gain = parseFloat(btn.dataset.gain) || 25;
-      const emoji = btn.dataset.emoji || '🍕';
+      const foodId = btn.dataset.food;
+      const item = FOOD_MENU[foodId];
+      if (!item) return;
 
-      if (petState.hunger >= 100 && food !== 'coffee') {
+      // 1. Проверка достаточности монет
+      if (petState.coins < item.cost) {
+        safeHaptic('warning');
+        playSfx('buzz');
+        btn.classList.add('border-rose-500', 'bg-rose-50');
+        gsap.fromTo(btn, { x: -6 }, {
+          x: 6, duration: 0.08, repeat: 3, yoyo: true,
+          onComplete: () => {
+            btn.classList.remove('border-rose-500', 'bg-rose-50');
+            btn.style.transform = '';
+          }
+        });
+        showToast('Недостаточно монет! Загляни в гостиную и заработай в мини-играх 🎮', 'warning');
+        updateSpeech('У нас не хватает монеток на это блюдо! Давай поиграем в гостиной? 🎮🪙');
+        return;
+      }
+
+      if (petState.hunger >= 100 && item.energy === 0) {
         safeHaptic('warning');
         updateSpeech('Я наелась, больше не влезает! 😋');
         return;
       }
 
-      executeFeed(food, gain, emoji, e.clientX, e.clientY);
+      executeFeed(item, e.clientX, e.clientY);
     });
   });
 
@@ -2349,7 +2841,6 @@ function setupFoodDrag() {
 
     const mouth = getMouthScreenPos();
     const dist = Math.hypot(e.clientX - mouth.x, e.clientY - mouth.y);
-    // 1. При перетаскивании еды: как только курсор ближе 140px к лицу персонажа, рот приоткрывается
     if (dist < 140) {
       const openProgress = Math.min(1.0, Math.max(0.0, (140 - dist) / 90));
       dragElem.style.transform = `translate(-50%, -50%) scale(${1.0 + openProgress * 0.25})`;
@@ -2374,7 +2865,7 @@ function setupFoodDrag() {
     const mouth = getMouthScreenPos();
     const dist = Math.hypot(e.clientX - mouth.x, e.clientY - mouth.y);
     if (dist < 160) {
-      executeFeed(draggedFood.food, draggedFood.gain, draggedFood.emoji, e.clientX, e.clientY, dragElem);
+      executeFeed(draggedFood.item, e.clientX, e.clientY, dragElem);
     } else {
       if (bones.jaw) gsap.to(bones.jaw.rotation, { x: 0, duration: 0.2 });
       if (characterMesh && characterMesh.morphTargetInfluences && morphMouthIndex !== -1) {
@@ -2392,23 +2883,13 @@ function setupFoodDrag() {
   window.addEventListener('pointercancel', onFoodDrop);
 }
 
-function executeFeed(food, gain, emoji, startX, startY, existingElem = null) {
+function executeFeed(item, startX, startY, existingElem = null) {
   const mouthScreen = getMouthScreenPos();
 
-  // 1. 2D-спрайт еды сразу скрывается при отпускании
   if (existingElem) existingElem.remove();
   if (dragElem) { dragElem.remove(); dragElem = null; }
 
-  // 2. На уровне рта на 0.25 секунды создается маленький 3D-меш (кусочек), который плавно втягивается в рот (scale -> 0)
-  const foodColors = {
-    pizza: 0xf59e0b,
-    croissant: 0xd97706,
-    cake: 0xf472b6,
-    coffee: 0x78350f,
-    watermelon: 0xef4444
-  };
-  const color = foodColors[food] || 0xf59e0b;
-
+  const color = item.color || 0xf59e0b;
   const foodPieceGeo = new THREE.DodecahedronGeometry(0.038, 1);
   const foodPieceMat = new THREE.MeshStandardMaterial({
     color: color,
@@ -2418,17 +2899,14 @@ function executeFeed(food, gain, emoji, startX, startY, existingElem = null) {
   const foodPiece = new THREE.Mesh(foodPieceGeo, foodPieceMat);
 
   const mouthX = charGroup ? charGroup.position.x : 14.0;
-  // На кухне персонаж сидит за столом (y = -0.06), точная высота рта строго mouthTargetY = charGroup.position.y + 0.78 (строго в губы, а не в лоб!)
   const mouthYOffset = (currentRoom === 'kitchen') ? 0.845 : 0.88;
   const mouthTargetY = charGroup ? (charGroup.position.y + mouthYOffset) : 0.785;
   const mouthTargetZ = charGroup ? (charGroup.position.z + 0.130) : 0.31;
 
-  // Стартовая позиция кусочка еды прямо перед сомкнутыми губами
   foodPiece.position.set(mouthX, mouthTargetY, mouthTargetZ + 0.05);
   foodPiece.scale.set(1, 1, 1);
   scene.add(foodPiece);
 
-  // Втягивание строго на линии смыкания губ за 0.25 секунды с уменьшением scale -> 0
   gsap.to(foodPiece.position, {
     y: mouthTargetY,
     z: mouthTargetZ - 0.02,
@@ -2447,20 +2925,15 @@ function executeFeed(food, gain, emoji, startX, startY, existingElem = null) {
       foodPieceGeo.dispose();
       foodPieceMat.dispose();
 
-      // 3. Рот закрывается, звук «ням», 3 цикла покачивания головы и челюсти
       playVoiceClip('eat');
       playSfx('eat');
       safeHaptic('success');
 
-      // Закрытие рта
       if (characterMesh && characterMesh.morphTargetInfluences && morphMouthIndex !== -1) {
         characterMesh.morphTargetInfluences[morphMouthIndex] = 0;
       }
-      if (bones.jaw) {
-        bones.jaw.rotation.x = 0;
-      }
+      if (bones.jaw) bones.jaw.rotation.x = 0;
 
-      // 3 цикла покачивания головы (repeat: 5 с yoyo = 3 полных колебания)
       if (bones.head) {
         const baseHeadX = initialBoneRots?.head?.x || 0;
         gsap.to(bones.head.rotation, {
@@ -2475,7 +2948,6 @@ function executeFeed(food, gain, emoji, startX, startY, existingElem = null) {
         });
       }
 
-      // 3 цикла движения челюсти
       if (characterMesh && characterMesh.morphTargetInfluences && morphMouthIndex !== -1) {
         gsap.to(characterMesh.morphTargetInfluences, {
           [morphMouthIndex]: 0.45,
@@ -2500,22 +2972,26 @@ function executeFeed(food, gain, emoji, startX, startY, existingElem = null) {
         });
       }
 
-      // Начисление очков сытости
-      petState.hunger = Math.min(100, petState.hunger + gain);
-      if (food === 'coffee') petState.energy = Math.min(100, petState.energy + 12);
-      else if (food === 'watermelon') petState.hygiene = Math.min(100, petState.hygiene + 8);
-      petState.coins += 2;
+      // 1. Списание стоимости еды строго за монеты
+      updateCoins(-item.cost);
+
+      // 2. Начисление всех заявленных мульти-эффектов параметров:
+      petState.hunger = Math.min(100, petState.hunger + item.hunger);
+      if (item.fun) petState.fun = Math.min(100, petState.fun + item.fun);
+      if (item.energy) petState.energy = Math.min(100, petState.energy + item.energy);
+      if (item.hygiene) petState.hygiene = Math.min(100, petState.hygiene + item.hygiene);
       saveState();
       updateHUD();
 
-      spawnFloatingText(`+${gain}% 😋`, mouthScreen.x, mouthScreen.y - 30);
+      // Всплывающий бейдж и реплика
+      spawnFloatingText(`-${item.cost} 🪙 | +${item.hunger}% 🍖`, mouthScreen.x, mouthScreen.y - 30);
       spawnHeart(mouthScreen.x, mouthScreen.y - 10);
-      updateSpeech('Ням-ням! Очень вкусно! 🍰🥰');
+      updateSpeech(`Ням-ням! ${item.name} невероятно вкусный! 🍰🥰`);
 
       fetch('/api/action', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'feed' })
+        body: JSON.stringify({ action: 'feed', food: item.id })
       }).catch(() => {});
     }
   });
@@ -3677,7 +4153,47 @@ function endArcadeGame() {
   }, 200);
 }
 
-$('btn-start-arcade')?.addEventListener('click', openArcade);
+// ─── МЕНЮ ВЫБОРА МИНИ-ИГР «ИГРОВОЙ КЛУБ ЛЁЛИ» ────────────────────────────────
+const gamesModal = $('games-modal');
+const memoryModal = $('memory-modal');
+const coinCatcherModal = $('coin-catcher-modal');
+
+function openGamesModal() {
+  safeHaptic('light');
+  if (gamesModal) {
+    gamesModal.classList.remove('hidden');
+    gamesModal.classList.add('flex');
+  }
+}
+
+function closeGamesModal() {
+  if (gamesModal) {
+    gamesModal.classList.add('hidden');
+    gamesModal.classList.remove('flex');
+  }
+}
+
+// Кнопка в гостиной и иконка геймпада
+$('btn-start-arcade')?.addEventListener('click', openGamesModal);
+$('circle-fun')?.addEventListener('click', () => {
+  if (currentRoom === 'living') openGamesModal();
+});
+$('btn-close-games')?.addEventListener('click', closeGamesModal);
+
+$('btn-choice-arcade')?.addEventListener('click', () => {
+  closeGamesModal();
+  openArcade();
+});
+$('btn-choice-memory')?.addEventListener('click', () => {
+  closeGamesModal();
+  openMemoryGame();
+});
+$('btn-choice-catcher')?.addEventListener('click', () => {
+  closeGamesModal();
+  openCoinCatcher();
+});
+
+// Кнопки управления аркадой «Ловец Счастья»
 $('btn-start-game-now')?.addEventListener('click', startArcadeGame);
 $('btn-close-arcade')?.addEventListener('click', () => {
   arcadeRunning = false;
@@ -3685,6 +4201,383 @@ $('btn-close-arcade')?.addEventListener('click', () => {
   arcadeModal.classList.add('hidden');
   arcadeModal.classList.remove('flex');
 });
+
+// ─── МИНИ-ИГРА 1: «НАЙДИ ПАРУ» (MEMORY CARDS 4x3) ────────────────────────────
+const MEMORY_SYMBOLS = ['🍓', '🐱', '🌸', '🍰', '💖', '⭐'];
+let memoryCards = [];
+let flippedCards = [];
+let matchedPairsCount = 0;
+let memoryTimerInterval = null;
+let memoryTimeLeft = 40;
+let memoryIsLocked = false;
+
+function openMemoryGame() {
+  safeHaptic('success');
+  memoryModal.classList.remove('hidden');
+  memoryModal.classList.add('flex');
+  $('memory-result-overlay').classList.add('hidden');
+  $('memory-result-overlay').classList.remove('flex');
+  startMemoryGame();
+}
+
+function closeMemoryGame() {
+  if (memoryTimerInterval) clearInterval(memoryTimerInterval);
+  memoryModal.classList.add('hidden');
+  memoryModal.classList.remove('flex');
+}
+
+function startMemoryGame() {
+  if (memoryTimerInterval) clearInterval(memoryTimerInterval);
+  memoryTimeLeft = 40;
+  matchedPairsCount = 0;
+  flippedCards = [];
+  memoryIsLocked = false;
+
+  $('memory-timer').innerText = `${memoryTimeLeft}с`;
+  $('memory-timer').className = 'text-sm font-black text-indigo-700';
+  $('memory-pairs').innerText = `0 / 6`;
+  $('memory-result-overlay').classList.add('hidden');
+  $('memory-result-overlay').classList.remove('flex');
+
+  // Генерируем 12 карт (6 пар) и перемешиваем
+  const deck = [...MEMORY_SYMBOLS, ...MEMORY_SYMBOLS];
+  for (let i = deck.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [deck[i], deck[j]] = [deck[j], deck[i]];
+  }
+
+  const grid = $('memory-grid');
+  grid.innerHTML = '';
+  memoryCards = [];
+
+  deck.forEach((symbol, index) => {
+    const card = document.createElement('div');
+    card.className = 'memory-card w-full h-[76px] cursor-pointer select-none';
+    card.dataset.symbol = symbol;
+    card.dataset.index = index;
+
+    card.innerHTML = `
+      <div class="memory-card-inner">
+        <div class="memory-card-front bg-gradient-to-br from-indigo-700 via-purple-700 to-purple-900 border-2 border-indigo-400/50 shadow-md">
+          <span class="text-xl opacity-75">✨</span>
+        </div>
+        <div class="memory-card-back bg-white border-2 border-pink-400 shadow-xl">
+          <span class="text-3xl">${symbol}</span>
+        </div>
+      </div>
+    `;
+
+    card.addEventListener('click', () => onMemoryCardClick(card));
+    grid.appendChild(card);
+    memoryCards.push(card);
+  });
+
+  // Запуск таймера 40 секунд
+  memoryTimerInterval = setInterval(() => {
+    memoryTimeLeft--;
+    const timerEl = $('memory-timer');
+    if (timerEl) {
+      timerEl.innerText = `${memoryTimeLeft}с`;
+      if (memoryTimeLeft <= 10) {
+        timerEl.className = 'text-sm font-black text-rose-500 animate-pulse';
+      }
+    }
+
+    if (memoryTimeLeft <= 0) {
+      clearInterval(memoryTimerInterval);
+      endMemoryGame(false);
+    }
+  }, 1000);
+}
+
+function onMemoryCardClick(card) {
+  if (memoryIsLocked) return;
+  if (card.classList.contains('is-flipped') || card.classList.contains('is-matched')) return;
+
+  playSfx('tap');
+  safeHaptic('light');
+  card.classList.add('is-flipped');
+  flippedCards.push(card);
+
+  if (flippedCards.length === 2) {
+    memoryIsLocked = true;
+    const [c1, c2] = flippedCards;
+    if (c1.dataset.symbol === c2.dataset.symbol) {
+      // Совпадение!
+      setTimeout(() => {
+        playSfx('match');
+        safeHaptic('success');
+        c1.classList.add('is-matched');
+        c2.classList.add('is-matched');
+
+        // Искры над совпавшей парой
+        const rect1 = c1.getBoundingClientRect();
+        confetti({
+          particleCount: 20,
+          spread: 40,
+          origin: { x: (rect1.left + rect1.width / 2) / window.innerWidth, y: (rect1.top + rect1.height / 2) / window.innerHeight }
+        });
+
+        matchedPairsCount++;
+        $('memory-pairs').innerText = `${matchedPairsCount} / 6`;
+        flippedCards = [];
+        memoryIsLocked = false;
+
+        if (matchedPairsCount === 6) {
+          clearInterval(memoryTimerInterval);
+          endMemoryGame(true);
+        }
+      }, 350);
+    } else {
+      // Не совпало
+      setTimeout(() => {
+        playSfx('buzz');
+        safeHaptic('warning');
+        c1.classList.remove('is-flipped');
+        c2.classList.remove('is-flipped');
+        flippedCards = [];
+        memoryIsLocked = false;
+      }, 700);
+    }
+  }
+}
+
+function endMemoryGame(isWin) {
+  const overlay = $('memory-result-overlay');
+  overlay.classList.remove('hidden');
+  overlay.classList.add('flex');
+
+  if (isWin) {
+    playSfx('fanfare');
+    safeHaptic('success');
+    confetti({ particleCount: 90, spread: 70, origin: { y: 0.6 } });
+
+    // Расчет награды: от 25 до 50 монет в зависимости от оставшегося времени
+    const reward = Math.round(25 + (memoryTimeLeft / 40) * 25);
+    updateCoins(reward);
+    petState.fun = Math.min(100, petState.fun + 20);
+    saveState();
+    updateHUD();
+
+    $('memory-result-icon').innerText = '🎉';
+    $('memory-result-title').innerText = 'БЛЕСТЯЩАЯ ПОБЕДА!';
+    $('memory-result-desc').innerHTML = `Ты открыл все пары за <b>${40 - memoryTimeLeft}с</b>!<br><span class="text-amber-300 font-black">+${reward} 🪙</span> зачислено на баланс, +20% к радости! ✨`;
+  } else {
+    playSfx('buzz');
+    safeHaptic('warning');
+    updateCoins(5);
+    $('memory-result-icon').innerText = '⏰';
+    $('memory-result-title').innerText = 'ВРЕМЯ ВЫШЛО!';
+    $('memory-result-desc').innerHTML = `Собрано пар: <b>${matchedPairsCount} из 6</b>.<br>Утешительный бонус: <span class="text-amber-300 font-bold">+5 🪙</span>. Попробуй ещё раз!`;
+  }
+}
+
+$('btn-close-memory')?.addEventListener('click', closeMemoryGame);
+$('btn-memory-exit')?.addEventListener('click', closeMemoryGame);
+$('btn-memory-replay')?.addEventListener('click', startMemoryGame);
+
+// ─── МИНИ-ИГРА 2: «ЛОВЕЦ МОНЕТ И ЗВЁЗД» (FALLING CATCHER) ──────────────────────
+const catcherCanvas = $('coin-catcher-canvas');
+let catcherCtx = null;
+let catcherAnimId = null;
+let catcherBasket = { x: 150, y: 0, w: 75, h: 35 };
+let catcherItems = [];
+let catcherScore = 0;
+let catcherCoinsEarned = 0;
+let catcherRunning = false;
+let catcherTimeLeft = 30;
+let catcherTimerInterval = null;
+let catcherLastSpawn = 0;
+let catcherFrenzyUntil = 0;
+
+const CATCHER_TYPES = [
+  { emoji: '🪙', type: 'coin', speed: 3.5, pts: 0, coins: 2 },
+  { emoji: '🪙', type: 'coin', speed: 3.8, pts: 0, coins: 2 },
+  { emoji: '⭐', type: 'star', speed: 4.2, pts: 10, coins: 0 },
+  { emoji: '💖', type: 'heart', speed: 3.2, pts: 5, coins: 0 },
+  { emoji: '💣', type: 'bomb', speed: 4.0, pts: 0, coins: 0 }
+];
+
+function openCoinCatcher() {
+  safeHaptic('success');
+  coinCatcherModal.classList.remove('hidden');
+  coinCatcherModal.classList.add('flex');
+  $('catcher-intro').classList.remove('hidden');
+  $('catcher-result-overlay').classList.add('hidden');
+  $('catcher-result-overlay').classList.remove('flex');
+  resizeCatcherCanvas();
+}
+
+function resizeCatcherCanvas() {
+  if (!catcherCanvas) return;
+  catcherCanvas.width = catcherCanvas.parentElement.clientWidth;
+  catcherCanvas.height = catcherCanvas.parentElement.clientHeight;
+  catcherBasket.y = catcherCanvas.height - 45;
+  catcherBasket.x = catcherCanvas.width / 2 - catcherBasket.w / 2;
+  catcherCtx = catcherCanvas.getContext('2d');
+}
+
+function startCoinCatcherGame() {
+  $('catcher-intro').classList.add('hidden');
+  $('catcher-result-overlay').classList.add('hidden');
+  $('catcher-result-overlay').classList.remove('flex');
+
+  catcherScore = 0;
+  catcherCoinsEarned = 0;
+  catcherTimeLeft = 30;
+  catcherItems = [];
+  catcherRunning = true;
+  catcherLastSpawn = Date.now();
+  catcherFrenzyUntil = 0;
+
+  $('catcher-timer').innerText = '30с';
+  $('catcher-coins').innerText = '0';
+  $('catcher-stars').innerText = '0';
+
+  if (catcherTimerInterval) clearInterval(catcherTimerInterval);
+  catcherTimerInterval = setInterval(() => {
+    catcherTimeLeft--;
+    $('catcher-timer').innerText = `${catcherTimeLeft}с`;
+    if (catcherTimeLeft <= 5) {
+      $('catcher-timer').className = 'text-sm font-black text-rose-500 animate-pulse';
+    } else {
+      $('catcher-timer').className = 'text-sm font-black text-indigo-700';
+    }
+
+    if (catcherTimeLeft <= 0) {
+      clearInterval(catcherTimerInterval);
+      endCoinCatcherGame();
+    }
+  }, 1000);
+
+  if (catcherAnimId) cancelAnimationFrame(catcherAnimId);
+  catcherLoop();
+}
+
+const onCatcherDrag = (e) => {
+  if (!catcherRunning) return;
+  const rect = catcherCanvas.getBoundingClientRect();
+  const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+  const x = clientX - rect.left;
+  catcherBasket.x = Math.max(0, Math.min(catcherCanvas.width - catcherBasket.w, x - catcherBasket.w / 2));
+};
+catcherCanvas?.addEventListener('mousemove', onCatcherDrag);
+catcherCanvas?.addEventListener('touchmove', onCatcherDrag, { passive: true });
+
+function catcherLoop() {
+  if (!catcherRunning) return;
+  catcherAnimId = requestAnimationFrame(catcherLoop);
+
+  const now = Date.now();
+  catcherCtx.clearRect(0, 0, catcherCanvas.width, catcherCanvas.height);
+
+  const isFrenzy = now < catcherFrenzyUntil;
+  const spawnDelay = isFrenzy ? 300 : 550;
+
+  if (now - catcherLastSpawn > spawnDelay) {
+    let pool = CATCHER_TYPES;
+    if (isFrenzy) {
+      pool = [
+        { emoji: '🪙', type: 'coin', speed: 4.2, pts: 0, coins: 2 },
+        { emoji: '🪙', type: 'coin', speed: 4.6, pts: 0, coins: 2 },
+        { emoji: '⭐', type: 'star', speed: 4.5, pts: 10, coins: 0 }
+      ];
+    }
+    const itemType = pool[Math.floor(Math.random() * pool.length)];
+    catcherItems.push({
+      x: 25 + Math.random() * (catcherCanvas.width - 50),
+      y: -20,
+      ...itemType
+    });
+    catcherLastSpawn = now;
+  }
+
+  for (let i = catcherItems.length - 1; i >= 0; i--) {
+    const item = catcherItems[i];
+    item.y += item.speed;
+
+    catcherCtx.font = '28px sans-serif';
+    catcherCtx.textAlign = 'center';
+    catcherCtx.fillText(item.emoji, item.x, item.y);
+
+    const caught = (
+      item.y >= catcherBasket.y - 12 &&
+      item.y <= catcherBasket.y + catcherBasket.h &&
+      item.x >= catcherBasket.x - 12 &&
+      item.x <= catcherBasket.x + catcherBasket.w + 12
+    );
+
+    if (caught) {
+      if (item.type === 'coin') {
+        playSfx('coin');
+        safeHaptic('light');
+        catcherCoinsEarned += item.coins;
+        $('catcher-coins').innerText = catcherCoinsEarned;
+      } else if (item.type === 'star') {
+        playSfx('match');
+        safeHaptic('medium');
+        catcherScore += item.pts;
+        catcherFrenzyUntil = now + 5000;
+        $('catcher-stars').innerText = catcherScore;
+        showToast('⭐ ЗВЁЗДНЫЙ ФРЕНЗИ! Монетки сыпятся рекой!', 'info');
+      } else if (item.type === 'heart') {
+        playSfx('tap');
+        safeHaptic('light');
+        petState.fun = Math.min(100, petState.fun + 5);
+        saveState();
+        updateHUD();
+      } else if (item.type === 'bomb') {
+        playSfx('buzz');
+        safeHaptic('error');
+        catcherTimeLeft = Math.max(0, catcherTimeLeft - 4);
+        $('catcher-timer').innerText = `${catcherTimeLeft}с`;
+        showToast('💣 Тучка! -4 секунды времени!', 'warning');
+      }
+      catcherItems.splice(i, 1);
+      continue;
+    }
+
+    if (item.y > catcherCanvas.height + 30) catcherItems.splice(i, 1);
+  }
+
+  // Отрисовка корзинки
+  catcherCtx.font = '36px sans-serif';
+  catcherCtx.textAlign = 'center';
+  catcherCtx.fillText('🧺', catcherBasket.x + catcherBasket.w / 2, catcherBasket.y + 24);
+}
+
+function endCoinCatcherGame() {
+  catcherRunning = false;
+  if (catcherTimerInterval) clearInterval(catcherTimerInterval);
+  if (catcherAnimId) cancelAnimationFrame(catcherAnimId);
+
+  playSfx('fanfare');
+  safeHaptic('success');
+  confetti({ particleCount: 90, spread: 70, origin: { y: 0.6 } });
+
+  // Начисляем заработанные монеты
+  updateCoins(catcherCoinsEarned);
+
+  $('catcher-final-coins').innerText = `+${catcherCoinsEarned} 🪙`;
+  $('catcher-final-stars').innerText = `${catcherScore} ⭐`;
+
+  const overlay = $('catcher-result-overlay');
+  overlay.classList.remove('hidden');
+  overlay.classList.add('flex');
+}
+
+function closeCoinCatcherGame() {
+  catcherRunning = false;
+  if (catcherTimerInterval) clearInterval(catcherTimerInterval);
+  if (catcherAnimId) cancelAnimationFrame(catcherAnimId);
+  coinCatcherModal.classList.add('hidden');
+  coinCatcherModal.classList.remove('flex');
+}
+
+$('btn-start-catcher-now')?.addEventListener('click', startCoinCatcherGame);
+$('btn-close-catcher')?.addEventListener('click', closeCoinCatcherGame);
+$('btn-catcher-exit')?.addEventListener('click', closeCoinCatcherGame);
+$('btn-catcher-replay')?.addEventListener('click', startCoinCatcherGame);
 
 // ─── 12. МАГАЗИН УЮТА (СМЕНА ОБОЕВ В ГОСТИНОЙ) ───────────────────────────────
 const shopModal = $('shop-modal');
@@ -3711,14 +4604,14 @@ document.querySelectorAll('.btn-theme-apply').forEach(btn => {
     const cost = parseInt(btn.dataset.cost) || 0;
 
     if (cost > 0 && petState.coins < cost) {
-      safeHaptic('error');
-      alert('Недостаточно монеток любви! Заработай их в мини-игре 🎮');
+      safeHaptic('warning');
+      playSfx('buzz');
+      showToast('Недостаточно монет! Загляни в гостиную и заработай в мини-играх 🎮', 'warning');
       return;
     }
 
     if (cost > 0) {
-      petState.coins -= cost;
-      saveState();
+      updateCoins(-cost);
     }
 
     safeHaptic('success');
