@@ -1791,7 +1791,7 @@ function createPleatedSkirtMaterial() {
   bumpCanvas.height = 256;
   const bCtx = bumpCanvas.getContext('2d');
 
-  // Благородный цвет графита
+  // Базовый цвет графита (#374151)
   ctx.fillStyle = '#374151';
   ctx.fillRect(0, 0, 512, 256);
 
@@ -1804,28 +1804,28 @@ function createPleatedSkirtMaterial() {
   for (let i = 0; i < numPleats; i++) {
     const x = i * pleatWidth;
 
-    // Мягкая затененная внутренняя грань складки
-    ctx.fillStyle = '#2a333e';
-    ctx.fillRect(x, 0, pleatWidth * 0.44, 256);
+    // Мягкий градиент: чередование приглушенного темно-серого (#2d3748) и базового графита (#374151)
+    const grad = ctx.createLinearGradient(x, 0, x + pleatWidth, 0);
+    grad.addColorStop(0.0, '#2d3748');
+    grad.addColorStop(0.4, '#2d3748');
+    grad.addColorStop(0.6, '#374151');
+    grad.addColorStop(1.0, '#374151');
+    ctx.fillStyle = grad;
+    ctx.fillRect(x, 0, pleatWidth, 256);
 
-    // Мягкая освещенная передняя грань складки цвета графита
-    ctx.fillStyle = '#414d5c';
-    ctx.fillRect(x + pleatWidth * 0.44, 0, pleatWidth * 0.56, 256);
-
-    // Деликатный тонкий световой акцент на ребре
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.10)';
-    ctx.fillRect(x + pleatWidth * 0.44, 0, 1.2, 256);
-
-    // Мягкий рельеф без металлической резкости
-    bCtx.fillStyle = '#484848';
-    bCtx.fillRect(x, 0, pleatWidth * 0.44, 256);
-    bCtx.fillStyle = '#b4b4b4';
-    bCtx.fillRect(x + pleatWidth * 0.44, 0, pleatWidth * 0.56, 256);
+    // Очень деликатный и мягкий bump
+    const bGrad = bCtx.createLinearGradient(x, 0, x + pleatWidth, 0);
+    bGrad.addColorStop(0.0, '#666666');
+    bGrad.addColorStop(0.4, '#666666');
+    bGrad.addColorStop(0.6, '#999999');
+    bGrad.addColorStop(1.0, '#999999');
+    bCtx.fillStyle = bGrad;
+    bCtx.fillRect(x, 0, pleatWidth, 256);
   }
 
-  // Тонкий светлый кант на самом подоле текстуры
+  // Тонкий деликатный светлый кант на подоле текстуры
   ctx.fillStyle = '#f8fafc';
-  ctx.fillRect(0, 256 - 12, 512, 10);
+  ctx.fillRect(0, 256 - 8, 512, 6);
 
   const tex = new THREE.CanvasTexture(canvas);
   tex.wrapS = THREE.RepeatWrapping;
@@ -1838,9 +1838,9 @@ function createPleatedSkirtMaterial() {
   return new THREE.MeshStandardMaterial({
     map: tex,
     bumpMap: bumpTex,
-    bumpScale: 0.02, // Мягкий рельеф ткани
-    roughness: 0.88,
-    metalness: 0.01
+    bumpScale: 0.008, // Мягкий рельеф без жестких граней
+    roughness: 0.95,  // Полностью матовая ткань без блеска
+    metalness: 0.0
   });
 }
 
@@ -1848,24 +1848,24 @@ function buildCharacterSkirt() {
   const skirtGroup = new THREE.Group();
   skirtGroup.name = 'characterLegs';
 
-  // 1. Цилиндр с мягким естественным силуэтом (верх 0.114, низ 0.142, высота 0.13, 32 сегмента)
+  // 1. Анатомический А-силуэт: верх 0.112, низ 0.126, высота 0.135, 32 сегмента, Y 0.435
   const skirtMat = createPleatedSkirtMaterial();
-  const skirtGeo = new THREE.CylinderGeometry(0.114, 0.142, 0.13, 32, 1, false);
+  const skirtGeo = new THREE.CylinderGeometry(0.112, 0.126, 0.135, 32, 3, false);
   const skirt = new THREE.Mesh(skirtGeo, skirtMat);
-  skirt.position.set(0, 0.445, 0);
+  skirt.position.set(0, 0.435, 0);
   skirt.castShadow = true;
   skirt.receiveShadow = true;
   skirtGroup.add(skirt);
 
-  // 2. Аккуратный светлый кант по подолу (толщина 0.006)
-  const hemGeo = new THREE.CylinderGeometry(0.1422, 0.1426, 0.006, 32, 1, true);
+  // 2. Деликатный тонкий кант подола: толщина 0.0045, радиус 0.1263
+  const hemGeo = new THREE.CylinderGeometry(0.1262, 0.1265, 0.0045, 32, 1, true);
   const hemMat = new THREE.MeshStandardMaterial({
     color: 0xf8fafc,
-    roughness: 0.6,
+    roughness: 0.8,
     metalness: 0.05
   });
   const hemTrim = new THREE.Mesh(hemGeo, hemMat);
-  hemTrim.position.set(0, 0.445 - 0.065 + 0.003, 0);
+  hemTrim.position.set(0, 0.435 - 0.0675 + 0.0022, 0);
   hemTrim.castShadow = true;
   skirtGroup.add(hemTrim);
 
