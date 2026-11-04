@@ -1715,44 +1715,44 @@ function createPleatedSkirtMaterial() {
   bumpCanvas.height = 256;
   const bCtx = bumpCanvas.getContext('2d');
 
-  // Основной глубокий графитовый цвет ткани (#374151)
+  // Базовый цвет графита (#374151)
   ctx.fillStyle = '#374151';
   ctx.fillRect(0, 0, 512, 256);
 
   bCtx.fillStyle = '#808080';
   bCtx.fillRect(0, 0, 512, 256);
 
-  // 24 четкие вертикальные складки плиссировки (по числу 24 граней цилиндра)
-  const numPleats = 24;
+  // 32 радиальные складки плиссировки для цилиндра
+  const numPleats = 32;
   const pleatWidth = 512 / numPleats;
 
   for (let i = 0; i < numPleats; i++) {
     const x = i * pleatWidth;
 
-    // Внутренняя тень в глубине складки (процедурные темные полоски)
-    ctx.fillStyle = '#1e242d';
-    ctx.fillRect(x, 0, pleatWidth * 0.44, 256);
+    // Внутренняя затененная складка
+    ctx.fillStyle = '#222933';
+    ctx.fillRect(x, 0, pleatWidth * 0.42, 256);
 
-    // Основная освещенная грань складки
-    ctx.fillStyle = '#3f4b5d';
-    ctx.fillRect(x + pleatWidth * 0.44, 0, pleatWidth * 0.56, 256);
+    // Освещенная передняя грань складки цвета графита
+    ctx.fillStyle = '#475569';
+    ctx.fillRect(x + pleatWidth * 0.42, 0, pleatWidth * 0.58, 256);
 
-    // Тонкий светлый блик на ребре складки
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
-    ctx.fillRect(x + pleatWidth * 0.44, 0, 1.5, 256);
+    // Тонкий деликатный блик на гребне складки
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.18)';
+    ctx.fillRect(x + pleatWidth * 0.42, 0, 1.5, 256);
 
-    // BumpMap: рельеф складок (впадина темная, гребень светлый)
-    bCtx.fillStyle = '#2d2d2d';
-    bCtx.fillRect(x, 0, pleatWidth * 0.44, 256);
-    bCtx.fillStyle = '#d0d0d0';
-    bCtx.fillRect(x + pleatWidth * 0.44, 0, pleatWidth * 0.56, 256);
+    // Рельефная карта нормалей/высот
+    bCtx.fillStyle = '#282828';
+    bCtx.fillRect(x, 0, pleatWidth * 0.42, 256);
+    bCtx.fillStyle = '#e0e0e0';
+    bCtx.fillRect(x + pleatWidth * 0.42, 0, pleatWidth * 0.58, 256);
   }
 
-  // Контрастный аккуратный кант по нижнему краю юбки
+  // Тонкий светлый кант по подолу
   ctx.fillStyle = '#f8fafc';
-  ctx.fillRect(0, 256 - 16, 512, 10);
-  ctx.fillStyle = '#94a3b8';
-  ctx.fillRect(0, 256 - 6, 512, 2);
+  ctx.fillRect(0, 256 - 16, 512, 12);
+  ctx.fillStyle = '#cbd5e1';
+  ctx.fillRect(0, 256 - 4, 512, 2);
 
   const tex = new THREE.CanvasTexture(canvas);
   tex.wrapS = THREE.RepeatWrapping;
@@ -1765,25 +1765,38 @@ function createPleatedSkirtMaterial() {
   return new THREE.MeshStandardMaterial({
     map: tex,
     bumpMap: bumpTex,
-    bumpScale: 0.035,
-    roughness: 0.85,
-    metalness: 0.02
+    bumpScale: 0.04,
+    roughness: 0.82,
+    metalness: 0.04
   });
 }
 
 function buildCharacterSkirt() {
-  const skirtGeo = new THREE.CylinderGeometry(0.120, 0.160, 0.12, 32, 1, false);
-  const skirtMat = new THREE.MeshStandardMaterial({
-    color: 0x5a6977,
-    roughness: 0.85,
-    metalness: 0.05
-  });
+  const skirtGroup = new THREE.Group();
+  skirtGroup.name = 'characterLegs';
+
+  // 1. Плиссированная мини-юбка с клёшем (верх 0.115, низ 0.155, высота 0.14, 32 сегмента)
+  const skirtMat = createPleatedSkirtMaterial();
+  const skirtGeo = new THREE.CylinderGeometry(0.115, 0.155, 0.14, 32, 1, false);
   const skirt = new THREE.Mesh(skirtGeo, skirtMat);
-  skirt.position.set(0, 0.445, 0);
+  skirt.position.set(0, 0.44, 0);
   skirt.castShadow = true;
   skirt.receiveShadow = true;
-  skirt.name = 'characterLegs';
-  return skirt;
+  skirtGroup.add(skirt);
+
+  // 2. Аккуратный светлый кант по нижнему срезу юбки (#f8fafc, толщина ~0.007)
+  const hemGeo = new THREE.CylinderGeometry(0.1552, 0.1556, 0.007, 32, 1, true);
+  const hemMat = new THREE.MeshStandardMaterial({
+    color: 0xf8fafc,
+    roughness: 0.6,
+    metalness: 0.1
+  });
+  const hemTrim = new THREE.Mesh(hemGeo, hemMat);
+  hemTrim.position.set(0, 0.44 - 0.07 + 0.0035, 0);
+  hemTrim.castShadow = true;
+  skirtGroup.add(hemTrim);
+
+  return skirtGroup;
 }
 
 function buildCharacterLegs() {
