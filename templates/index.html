@@ -3,7 +3,7 @@
 <head>
   <!-- Принудительный сброс устаревшего кэша браузера -->
   <script>
-    const APP_BUILD_VER = '20261104-v8-mobile-opt';
+    const APP_BUILD_VER = '20261104-v9-tg-push-deeplink';
     if (localStorage.getItem('tamagotchi_build_ver') !== APP_BUILD_VER) {
       localStorage.setItem('tamagotchi_build_ver', APP_BUILD_VER);
       if ('caches' in window) {
@@ -799,6 +799,79 @@ if (window.Telegram && window.Telegram.WebApp) {
 }
 const tg = window.Telegram?.WebApp;
 
+// ── Telegram WebApp: идентификатор пользователя и синхронизация состояния ──
+const tgUser = window.Telegram?.WebApp?.initDataUnsafe?.user;
+const tgUrlParams = new URLSearchParams(window.location.search);
+const tgUserId = tgUser?.id || (tgUrlParams.get('user_id') ? parseInt(tgUrlParams.get('user_id'), 10) : null) || (localStorage.getItem('tamagotchi_tg_user_id') ? parseInt(localStorage.getItem('tamagotchi_tg_user_id'), 10) : null);
+if (tgUser?.id) {
+  localStorage.setItem('tamagotchi_tg_user_id', tgUser.id);
+}
+
+function syncStateWithBackend() {
+  const uid = tgUserId || (localStorage.getItem('tamagotchi_tg_user_id') ? parseInt(localStorage.getItem('tamagotchi_tg_user_id'), 10) : null);
+  if (!uid) return;
+
+  const payload = {
+    telegram_id: uid,
+    hunger: Math.round(petState.hunger || 0),
+    energy: Math.round(petState.energy || 0),
+    hygiene: Math.round(petState.hygiene || 0),
+    fun: Math.round(petState.fun || 0),
+    coins: Math.round(petState.coins || 0)
+  };
+
+  const str = JSON.stringify(payload);
+  if (navigator.sendBeacon) {
+    try {
+      const blob = new Blob([str], { type: 'application/json' });
+      navigator.sendBeacon('/api/sync_state', blob);
+      return;
+    } catch(_) {}
+  }
+
+  fetch('/api/sync_state', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: str,
+    keepalive: true
+  }).catch(() => {});
+}
+
+// Периодическая синхронизация каждые 60 секунд
+setInterval(syncStateWithBackend, 60000);
+
+// Синхронизация при уходе с вкладки / сворачивании Telegram
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') syncStateWithBackend();
+});
+window.addEventListener('beforeunload', syncStateWithBackend);
+
+// Начальная синхронизация через 2.5 сек после загрузки
+setTimeout(syncStateWithBackend, 2500);
+
+// ── Обработка параметра запуска (Deep Links в нужную комнату) ──
+function handleDeepLink() {
+  let startParam = window.Telegram?.WebApp?.initDataUnsafe?.start_param;
+  if (!startParam) {
+    const p = new URLSearchParams(window.location.search);
+    startParam = p.get('startapp') || p.get('start_param') || p.get('room');
+  }
+  if (!startParam && window.location.hash) {
+    const hp = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+    startParam = hp.get('tgWebAppStartParam') || hp.get('startapp') || hp.get('start_param') || hp.get('room');
+  }
+
+  if (startParam) {
+    const targetRoom = startParam.toLowerCase().trim();
+    if (['kitchen', 'bathroom', 'bedroom', 'living'].includes(targetRoom)) {
+      console.log('[DeepLink] Fast switching directly to room:', targetRoom);
+      setTimeout(() => {
+        switchRoom(targetRoom);
+      }, 400);
+    }
+  }
+}
+
 function safeHaptic(style = 'light') {
   try {
     if (tg?.HapticFeedback) {
@@ -1335,6 +1408,7 @@ function initThreeScene() {
 
   // 3. Загружаем персонажа с полным сбросом emissive
   loadCharacterModel();
+handleDeepLink();
 
   // 4. Подключаем слушатели
   setupInteractions();
@@ -2426,6 +2500,7 @@ function loadCharacterModel() {
       }, 300);
 
       setTimeout(triggerSquashAndStretch, 600);
+      handleDeepLink();
     },
     (xhr) => {
       if (xhr.lengthComputable && bar) {

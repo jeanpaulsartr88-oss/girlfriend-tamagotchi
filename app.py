@@ -31,9 +31,10 @@ from sqlalchemy.orm import declarative_base, sessionmaker, scoped_session
 # ──────────────────────────────────────────────────────────────────────────────
 # Конфигурация и MOCK_MODE
 # ──────────────────────────────────────────────────────────────────────────────
-TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
-TELEGRAM_CHAT_ID   = os.getenv("TELEGRAM_CHAT_ID", "").strip()
-PORT               = int(os.getenv("PORT", 5000))
+TELEGRAM_BOT_TOKEN    = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
+TELEGRAM_BOT_USERNAME = os.getenv("TELEGRAM_BOT_USERNAME", "Lelya8_bot").strip().lstrip("@")
+TELEGRAM_CHAT_ID      = os.getenv("TELEGRAM_CHAT_ID", "").strip()
+PORT                  = int(os.getenv("PORT", 5000))
 
 # По умолчанию в локальном запуске MOCK_MODE = True
 # Никаких автоматических вызовов setWebhook или getUpdates при старте сервера!
@@ -131,6 +132,32 @@ class AlertLog(Base):
     last_alert_time = Column(DateTime, default=datetime.utcnow)
 
 
+class UserTamagotchi(Base):
+    __tablename__ = "user_tamagotchi"
+    telegram_id            = Column(Integer, primary_key=True)
+    hunger                 = Column(Integer, default=80)
+    energy                 = Column(Integer, default=80)
+    hygiene                = Column(Integer, default=90)
+    fun                    = Column(Integer, default=85)
+    coins                  = Column(Integer, default=100)
+    last_active_at         = Column(DateTime, default=datetime.utcnow)
+    last_notification_type = Column(String(50), nullable=True)
+    last_notification_time = Column(DateTime, nullable=True)
+
+    def to_dict(self):
+        return {
+            "telegram_id": self.telegram_id,
+            "hunger": int(self.hunger) if self.hunger is not None else 80,
+            "energy": int(self.energy) if self.energy is not None else 80,
+            "hygiene": int(self.hygiene) if self.hygiene is not None else 90,
+            "fun": int(self.fun) if self.fun is not None else 85,
+            "coins": int(self.coins) if self.coins is not None else 100,
+            "last_active_at": self.last_active_at.strftime("%Y-%m-%d %H:%M:%S") if self.last_active_at else None,
+            "last_notification_type": self.last_notification_type,
+            "last_notification_time": self.last_notification_time.strftime("%Y-%m-%d %H:%M:%S") if self.last_notification_time else None,
+        }
+
+
 def init_db():
     Base.metadata.create_all(bind=engine)
     db = SessionLocal()
@@ -146,6 +173,9 @@ def init_db():
         print(f"[Database] Seed error: {e}")
     finally:
         db.close()
+
+    # Запуск фонового планировщика уведомлений
+    threading.Thread(target=background_notification_worker, daemon=True).start()
 
 
 @app.teardown_appcontext
@@ -180,6 +210,165 @@ def send_telegram_alert(text: str, reply_markup: dict | None = None) -> None:
 
 _ALERT_COOLDOWN = 1200  # 20 минут между алертами
 
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Фоновые push-уведомления и правила потребностей
+# ──────────────────────────────────────────────────────────────────────────────
+NOTIFICATION_CONFIGS = {
+    "fun": {
+        "priority": 1,
+        "text": "Мне скучно, хочется движухи! Зайдём в игровой клуб погонять? 🎮✨",
+        "btn_text": "🎮 В игровой клуб",
+        "room": "living"
+    },
+    "hunger": {
+        "priority": 2,
+        "text": "В животике урчит... Я так проголодалась, пойдём покушаем вкусняшек? 🍕🍓",
+        "btn_text": "🍕 Покормить на кухне",
+        "room": "kitchen"
+    },
+    "hygiene": {
+        "priority": 3,
+        "text": "Я кажется испачкалась... Пойдём примем теплую пенную ванну? 🛁🫧",
+        "btn_text": "🚿 В ванную",
+        "room": "bathroom"
+    },
+    "energy": {
+        "priority": 4,
+        "text": "Глазки слипаются... Уложи меня баиньки, пожалуйста 🌙😴",
+        "btn_text": "🛏️ В спальню",
+        "room": "bedroom"
+    }
+}
+
+
+def send_tamagotchi_push(telegram_id: int, notif_type: str) -> dict:
+    cfg = NOTIFICATION_CONFIGS.get(notif_type, NOTIFICATION_CONFIGS["fun"])
+    deep_link_url = f"https://t.me/{TELEGRAM_BOT_USERNAME}/app?startapp={cfg['room']}"
+    keyboard = {
+        "inline_keyboard": [
+            [{"text": cfg["btn_text"], "url": deep_link_url}]
+        ]
+    }
+    payload = {
+        "chat_id": telegram_id,
+        "text": cfg["text"],
+        "parse_mode": "HTML",
+        "reply_markup": keyboard
+    }
+
+    if MOCK_MODE or not TELEGRAM_BOT_TOKEN:
+        print(f"[MOCK PUSH] Sent to {telegram_id} | Type: {notif_type} | Text: {cfg['text']} | URL: {deep_link_url}")
+        return {
+            "ok": True,
+            "mock": True,
+            "telegram_id": telegram_id,
+            "type": notif_type,
+            "text": cfg["text"],
+            "url": deep_link_url
+        }
+
+    try:
+        url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+        resp = requests.post(url, json=payload, timeout=6.0)
+        res_json = resp.json() if resp.status_code == 200 else {}
+        if resp.status_code != 200:
+            print(f"[Telegram Push API Error {resp.status_code}] {resp.text}")
+            return {
+                "ok": False,
+                "status_code": resp.status_code,
+                "telegram_id": telegram_id,
+                "type": notif_type,
+                "error": resp.text,
+                "text": cfg["text"],
+                "url": deep_link_url
+            }
+        print(f"[Telegram Push Success] Sent to {telegram_id} ({notif_type})")
+        return {
+            "ok": True,
+            "status_code": 200,
+            "telegram_id": telegram_id,
+            "type": notif_type,
+            "text": cfg["text"],
+            "url": deep_link_url,
+            "telegram_response": res_json
+        }
+    except Exception as e:
+        print(f"[Telegram Push Exception] {e}")
+        return {
+            "ok": False,
+            "error": str(e),
+            "telegram_id": telegram_id,
+            "type": notif_type,
+            "text": cfg["text"],
+            "url": deep_link_url
+        }
+
+
+def background_notification_worker():
+    """Фоновый поток проверки потребностей пользователей каждые 2 минуты."""
+    print("[Notification Worker] Background thread running.")
+    while True:
+        try:
+            time.sleep(120)  # проверка каждые 2 минуты
+            
+            # «Тихий режим»: не отправлять сообщения с 23:30 до 08:30 (по времени сервера)
+            now_local = datetime.now()
+            cur_min = now_local.hour * 60 + now_local.minute
+            if cur_min >= (23 * 60 + 30) or cur_min < (8 * 60 + 30):
+                continue
+
+            db = SessionLocal()
+            try:
+                now_utc = datetime.utcnow()
+                users = db.query(UserTamagotchi).all()
+                for u in users:
+                    if not u.last_active_at:
+                        continue
+                    
+                    elapsed_sec = (now_utc - u.last_active_at).total_seconds()
+                    # Не заходили более 2 часов (7200 сек)
+                    if elapsed_sec < 7200:
+                        continue
+
+                    # Cooldown: не чаще 1 раза в 3 часа (10800 сек)
+                    if u.last_notification_time:
+                        if (now_utc - u.last_notification_time).total_seconds() < 10800:
+                            continue
+
+                    # Расчет спада потребностей:
+                    # - Сытость: -15% каждые 2 часа (7.5% / час)
+                    # - Энергия: -10% каждые 2 часа (5.0% / час)
+                    # - Гигиена: -10% каждые 2.5 часа (4.0% / час)
+                    # - Настроение (fun): -15% каждые 1.5 часа (10.0% / час)
+                    elapsed_hours = elapsed_sec / 3600.0
+                    decayed_hunger  = max(0, int(u.hunger  - elapsed_hours * 7.5))
+                    decayed_energy  = max(0, int(u.energy  - elapsed_hours * 5.0))
+                    decayed_hygiene = max(0, int(u.hygiene - elapsed_hours * 4.0))
+                    decayed_fun     = max(0, int(u.fun     - elapsed_hours * 10.0))
+
+                    needed_type = None
+                    if decayed_fun < 30:
+                        needed_type = "fun"
+                    elif decayed_hunger < 25:
+                        needed_type = "hunger"
+                    elif decayed_hygiene < 25:
+                        needed_type = "hygiene"
+                    elif decayed_energy < 20:
+                        needed_type = "energy"
+
+                    if needed_type:
+                        res = send_tamagotchi_push(u.telegram_id, needed_type)
+                        u.last_notification_type = needed_type
+                        u.last_notification_time = now_utc
+                        db.commit()
+            except Exception as e:
+                print(f"[Notification Worker Error] {e}")
+            finally:
+                db.close()
+        except Exception as outer_e:
+            print(f"[Notification Worker Outer Error] {outer_e}")
+            time.sleep(30)
 
 def check_and_alert_if_low(hunger: float, energy: float, fun: float) -> None:
     """Если сытость, энергия или настроение < 20% — формируем алерт."""
@@ -317,6 +506,85 @@ def save_state():
     finally:
         db.close()
 
+
+@app.route("/api/sync_state", methods=["POST"])
+def sync_state():
+    data = request.get_json(force=True, silent=True) or {}
+    tid = data.get("telegram_id")
+    if not tid:
+        return jsonify({"status": "error", "message": "telegram_id is required"}), 400
+    
+    try:
+        tid = int(tid)
+    except (ValueError, TypeError):
+        return jsonify({"status": "error", "message": "invalid telegram_id"}), 400
+
+    db = SessionLocal()
+    try:
+        user = db.query(UserTamagotchi).filter(UserTamagotchi.telegram_id == tid).first()
+        if not user:
+            user = UserTamagotchi(telegram_id=tid)
+            db.add(user)
+
+        if "hunger" in data:
+            user.hunger = max(0, min(100, int(float(data["hunger"]))))
+        if "energy" in data:
+            user.energy = max(0, min(100, int(float(data["energy"]))))
+        if "hygiene" in data:
+            user.hygiene = max(0, min(100, int(float(data["hygiene"]))))
+        if "fun" in data:
+            user.fun = max(0, min(100, int(float(data["fun"]))))
+        if "coins" in data:
+            user.coins = max(0, int(float(data["coins"])))
+
+        user.last_active_at = datetime.utcnow()
+        db.commit()
+        return jsonify({"status": "success", "user": user.to_dict()})
+    except Exception as e:
+        db.rollback()
+        return jsonify({"status": "error", "message": str(e)}), 500
+    finally:
+        db.close()
+
+
+@app.route("/api/test_notification", methods=["GET", "POST"])
+def test_notification():
+    tid = request.args.get("telegram_id") or (request.get_json(silent=True) or {}).get("telegram_id")
+    notif_type = request.args.get("type") or (request.get_json(silent=True) or {}).get("type") or "fun"
+
+    if not tid:
+        tid = TELEGRAM_CHAT_ID
+        if not tid:
+            db = SessionLocal()
+            try:
+                first_user = db.query(UserTamagotchi).first()
+                if first_user:
+                    tid = first_user.telegram_id
+            finally:
+                db.close()
+
+    if not tid:
+        return jsonify({
+            "status": "error",
+            "message": "Параметр telegram_id обязателен (например, /api/test_notification?telegram_id=6671126368&type=fun)"
+        }), 400
+
+    try:
+        tid = int(tid)
+    except (ValueError, TypeError):
+        return jsonify({"status": "error", "message": "Некорректный telegram_id"}), 400
+
+    if notif_type not in NOTIFICATION_CONFIGS:
+        return jsonify({
+            "status": "error",
+            "message": f"Неизвестный тип уведомления '{notif_type}'. Доступные: {list(NOTIFICATION_CONFIGS.keys())}"
+        }), 400
+
+    result = send_tamagotchi_push(tid, notif_type)
+    return jsonify({
+        "status": "success" if result.get("ok") else "warning",
+        "result": result
+    })
 
 @app.route("/api/reactions", methods=["GET"])
 def get_reactions():
