@@ -674,6 +674,7 @@ function updateHUD() {
   updateGauge('meter-hygiene', 'txt-hygiene', petState.hygiene);
   updateGauge('meter-energy',  'txt-energy',  petState.energy);
   updateGauge('meter-fun',     'txt-fun',     petState.fun);
+  updateDirtSpots();
 
   if ($('hud-coins')) $('hud-coins').innerText = petState.coins;
 }
@@ -713,6 +714,7 @@ const wrap = $('canvas-wrap');
 let scene, camera, renderer, clock;
 let charGroup = null;
 let contactShadowMesh = null;
+let dirtGroup = null;
 const baseY = 0;
 const baseScale = 1.05;
 
@@ -1704,6 +1706,80 @@ function drawNightSky(canvas) {
 }
 
 // ─── ПРОЦЕДУРНЫЕ НОЖКИ, МИНИ-ЮБКА И СТИЛЬНЫЕ КРОССОВКИ (TALKING TOM STYLE) ───
+function createDirtBlobTexture() {
+  const canvas = document.createElement('canvas');
+  canvas.width = 64;
+  canvas.height = 64;
+  const ctx = canvas.getContext('2d');
+  
+  const grad = ctx.createRadialGradient(32, 32, 2, 32, 32, 30);
+  grad.addColorStop(0, 'rgba(255, 255, 255, 1.0)');
+  grad.addColorStop(0.35, 'rgba(255, 255, 255, 0.85)');
+  grad.addColorStop(0.65, 'rgba(255, 255, 255, 0.40)');
+  grad.addColorStop(0.85, 'rgba(255, 255, 255, 0.12)');
+  grad.addColorStop(1, 'rgba(255, 255, 255, 0.0)');
+  
+  ctx.fillStyle = grad;
+  ctx.beginPath();
+  ctx.arc(32, 32, 30, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+  ctx.beginPath(); ctx.arc(18, 22, 3, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.arc(46, 38, 2.5, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.arc(36, 16, 2, 0, Math.PI * 2); ctx.fill();
+
+  const tex = new THREE.CanvasTexture(canvas);
+  return tex;
+}
+
+function buildCharacterDirt() {
+  const group = new THREE.Group();
+  group.name = 'dirtGroup';
+  const dirtTex = createDirtBlobTexture();
+
+  const spotsData = [
+    { pos: [-0.055, 0.825, 0.108], rot: [0, -0.2, 0.1],      w: 0.045, h: 0.040 },
+    { pos: [0.055, 0.820, 0.108],  rot: [0, 0.2, -0.1],      w: 0.042, h: 0.038 },
+    { pos: [0.012, 0.785, 0.118],  rot: [0.1, 0, 0],         w: 0.035, h: 0.030 },
+    { pos: [-0.035, 0.705, 0.098], rot: [-0.15, -0.2, 0],    w: 0.050, h: 0.042 },
+    { pos: [0.042, 0.690, 0.095],  rot: [-0.15, 0.25, 0.1],  w: 0.046, h: 0.040 },
+    { pos: [-0.175, 0.540, 0.042], rot: [0.2, -0.6, 0.3],    w: 0.055, h: 0.048 },
+    { pos: [0.170, 0.535, 0.042],  rot: [0.2, 0.6, -0.3],     w: 0.052, h: 0.046 }
+  ];
+
+  spotsData.forEach(d => {
+    const geo = new THREE.PlaneGeometry(d.w, d.h);
+    const mat = new THREE.MeshBasicMaterial({
+      color: 0x3b2f27,
+      map: dirtTex,
+      transparent: true,
+      opacity: 0.0,
+      depthWrite: false,
+      polygonOffset: true,
+      polygonOffsetFactor: -1,
+      polygonOffsetUnits: -1
+    });
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.position.set(d.pos[0], d.pos[1], d.pos[2]);
+    mesh.rotation.set(d.rot[0], d.rot[1], d.rot[2]);
+    group.add(mesh);
+  });
+
+  return group;
+}
+
+function updateDirtSpots(hygienePercent = petState.hygiene) {
+  if (!dirtGroup) return;
+  const targetOpacity = THREE.MathUtils.clamp((80 - hygienePercent) / 80 * 0.75, 0, 0.75);
+  dirtGroup.children.forEach(spot => {
+    if (spot.material) {
+      spot.material.opacity = targetOpacity;
+      spot.visible = targetOpacity > 0.005;
+    }
+  });
+}
+
 function createPleatedSkirtMaterial() {
   const canvas = document.createElement('canvas');
   canvas.width = 512;
@@ -1715,44 +1791,41 @@ function createPleatedSkirtMaterial() {
   bumpCanvas.height = 256;
   const bCtx = bumpCanvas.getContext('2d');
 
-  // Базовый цвет графита (#374151)
+  // Благородный цвет графита
   ctx.fillStyle = '#374151';
   ctx.fillRect(0, 0, 512, 256);
 
   bCtx.fillStyle = '#808080';
   bCtx.fillRect(0, 0, 512, 256);
 
-  // 32 радиальные складки плиссировки для цилиндра
   const numPleats = 32;
   const pleatWidth = 512 / numPleats;
 
   for (let i = 0; i < numPleats; i++) {
     const x = i * pleatWidth;
 
-    // Внутренняя затененная складка
-    ctx.fillStyle = '#222933';
-    ctx.fillRect(x, 0, pleatWidth * 0.42, 256);
+    // Мягкая затененная внутренняя грань складки
+    ctx.fillStyle = '#2a333e';
+    ctx.fillRect(x, 0, pleatWidth * 0.44, 256);
 
-    // Освещенная передняя грань складки цвета графита
-    ctx.fillStyle = '#475569';
-    ctx.fillRect(x + pleatWidth * 0.42, 0, pleatWidth * 0.58, 256);
+    // Мягкая освещенная передняя грань складки цвета графита
+    ctx.fillStyle = '#414d5c';
+    ctx.fillRect(x + pleatWidth * 0.44, 0, pleatWidth * 0.56, 256);
 
-    // Тонкий деликатный блик на гребне складки
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.18)';
-    ctx.fillRect(x + pleatWidth * 0.42, 0, 1.5, 256);
+    // Деликатный тонкий световой акцент на ребре
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.10)';
+    ctx.fillRect(x + pleatWidth * 0.44, 0, 1.2, 256);
 
-    // Рельефная карта нормалей/высот
-    bCtx.fillStyle = '#282828';
-    bCtx.fillRect(x, 0, pleatWidth * 0.42, 256);
-    bCtx.fillStyle = '#e0e0e0';
-    bCtx.fillRect(x + pleatWidth * 0.42, 0, pleatWidth * 0.58, 256);
+    // Мягкий рельеф без металлической резкости
+    bCtx.fillStyle = '#484848';
+    bCtx.fillRect(x, 0, pleatWidth * 0.44, 256);
+    bCtx.fillStyle = '#b4b4b4';
+    bCtx.fillRect(x + pleatWidth * 0.44, 0, pleatWidth * 0.56, 256);
   }
 
-  // Тонкий светлый кант по подолу
+  // Тонкий светлый кант на самом подоле текстуры
   ctx.fillStyle = '#f8fafc';
-  ctx.fillRect(0, 256 - 16, 512, 12);
-  ctx.fillStyle = '#cbd5e1';
-  ctx.fillRect(0, 256 - 4, 512, 2);
+  ctx.fillRect(0, 256 - 12, 512, 10);
 
   const tex = new THREE.CanvasTexture(canvas);
   tex.wrapS = THREE.RepeatWrapping;
@@ -1765,9 +1838,9 @@ function createPleatedSkirtMaterial() {
   return new THREE.MeshStandardMaterial({
     map: tex,
     bumpMap: bumpTex,
-    bumpScale: 0.04,
-    roughness: 0.82,
-    metalness: 0.04
+    bumpScale: 0.02, // Мягкий рельеф ткани
+    roughness: 0.88,
+    metalness: 0.01
   });
 }
 
@@ -1775,24 +1848,24 @@ function buildCharacterSkirt() {
   const skirtGroup = new THREE.Group();
   skirtGroup.name = 'characterLegs';
 
-  // 1. Плиссированная мини-юбка с клёшем (верх 0.115, низ 0.155, высота 0.14, 32 сегмента)
+  // 1. Цилиндр с мягким естественным силуэтом (верх 0.114, низ 0.142, высота 0.13, 32 сегмента)
   const skirtMat = createPleatedSkirtMaterial();
-  const skirtGeo = new THREE.CylinderGeometry(0.115, 0.155, 0.14, 32, 1, false);
+  const skirtGeo = new THREE.CylinderGeometry(0.114, 0.142, 0.13, 32, 1, false);
   const skirt = new THREE.Mesh(skirtGeo, skirtMat);
-  skirt.position.set(0, 0.44, 0);
+  skirt.position.set(0, 0.445, 0);
   skirt.castShadow = true;
   skirt.receiveShadow = true;
   skirtGroup.add(skirt);
 
-  // 2. Аккуратный светлый кант по нижнему срезу юбки (#f8fafc, толщина ~0.007)
-  const hemGeo = new THREE.CylinderGeometry(0.1552, 0.1556, 0.007, 32, 1, true);
+  // 2. Аккуратный светлый кант по подолу (толщина 0.006)
+  const hemGeo = new THREE.CylinderGeometry(0.1422, 0.1426, 0.006, 32, 1, true);
   const hemMat = new THREE.MeshStandardMaterial({
     color: 0xf8fafc,
     roughness: 0.6,
-    metalness: 0.1
+    metalness: 0.05
   });
   const hemTrim = new THREE.Mesh(hemGeo, hemMat);
-  hemTrim.position.set(0, 0.44 - 0.07 + 0.0035, 0);
+  hemTrim.position.set(0, 0.445 - 0.065 + 0.003, 0);
   hemTrim.castShadow = true;
   skirtGroup.add(hemTrim);
 
@@ -1955,6 +2028,11 @@ function loadCharacterModel() {
       charGroup.add(characterLegs);
       window.characterLegs = characterLegs;
 
+      dirtGroup = buildCharacterDirt();
+      charGroup.add(dirtGroup);
+      window.dirtGroup = dirtGroup;
+      updateDirtSpots();
+
       charGroup.add(model);
       charGroup.scale.setScalar(baseScale);
       charGroup.position.set(0, 0.04, 0);
@@ -2086,6 +2164,7 @@ function switchRoom(roomName) {
 
   // Персонаж перемещается в соответствующую комнату
   if (charGroup) {
+    updateDirtSpots();
     const targetY = (roomName === 'bedroom' && petState.isSleeping) ? 0.58 : cfg.charPos.y;
     const targetZ = (roomName === 'bedroom' && petState.isSleeping) ? -0.45 : cfg.charPos.z;
     gsap.to(charGroup.position, {
@@ -2260,6 +2339,7 @@ function completeShowerWash() {
 
   // Персонаж радостно отряхивается
   if (charGroup) {
+    updateDirtSpots();
     gsap.to(charGroup.rotation, {
       y: 0.35, duration: 0.08, yoyo: true, repeat: 5, ease: 'power1.inOut',
       onComplete: () => { charGroup.rotation.y = 0; }
@@ -2278,8 +2358,8 @@ function getMouthScreenPos() {
   if (charGroup && camera) {
     // Точные мировые координаты губ персонажа:
     // На кухне персонаж сидит за столом (y = -0.06), точная высота линии губ: y + 0.78
-    const mouthYOffset = (currentRoom === 'kitchen') ? 0.78 : 0.88;
-    const mouthZOffset = (currentRoom === 'kitchen') ? 0.16 : 0.10;
+    const mouthYOffset = (currentRoom === 'kitchen') ? 0.845 : 0.88;
+    const mouthZOffset = (currentRoom === 'kitchen') ? 0.130 : 0.11;
     const targetVec = new THREE.Vector3(
       charGroup.position.x,
       charGroup.position.y + mouthYOffset,
@@ -2418,9 +2498,9 @@ function executeFeed(food, gain, emoji, startX, startY, existingElem = null) {
 
   const mouthX = charGroup ? charGroup.position.x : 14.0;
   // На кухне персонаж сидит за столом (y = -0.06), точная высота рта строго mouthTargetY = charGroup.position.y + 0.78 (строго в губы, а не в лоб!)
-  const mouthYOffset = (currentRoom === 'kitchen') ? 0.78 : 0.88;
-  const mouthTargetY = charGroup ? (charGroup.position.y + mouthYOffset) : 0.72;
-  const mouthTargetZ = charGroup ? (charGroup.position.z + 0.16) : 0.34;
+  const mouthYOffset = (currentRoom === 'kitchen') ? 0.845 : 0.88;
+  const mouthTargetY = charGroup ? (charGroup.position.y + mouthYOffset) : 0.785;
+  const mouthTargetZ = charGroup ? (charGroup.position.z + 0.130) : 0.31;
 
   // Стартовая позиция кусочка еды прямо перед сомкнутыми губами
   foodPiece.position.set(mouthX, mouthTargetY, mouthTargetZ + 0.05);
@@ -2430,7 +2510,7 @@ function executeFeed(food, gain, emoji, startX, startY, existingElem = null) {
   // Втягивание строго на линии смыкания губ за 0.25 секунды с уменьшением scale -> 0
   gsap.to(foodPiece.position, {
     y: mouthTargetY,
-    z: mouthTargetZ - 0.08,
+    z: mouthTargetZ - 0.02,
     duration: 0.25,
     ease: 'power2.in'
   });
@@ -2549,6 +2629,7 @@ function toggleBedroomLights() {
         onComplete: () => {
           // 2. Под затемнением положить персонажа на матрас (y = 0.58, z = -0.45, rotation x = -Math.PI / 2, глаза закрыты)
           if (charGroup) {
+    updateDirtSpots();
             charGroup.position.set(42, 0.58, -0.45);
             charGroup.rotation.set(-Math.PI / 2, 0, 0);
           }
@@ -2594,6 +2675,7 @@ function toggleBedroomLights() {
         onComplete: () => {
           // Под затемнением: персонаж встает на коврик (y = 0.04, z = 0.60, rotation 0,0,0) без клиппинга геометрии
           if (charGroup) {
+    updateDirtSpots();
             charGroup.position.set(42, 0.04, 0.60);
             charGroup.rotation.set(0, 0, 0);
           }
@@ -2852,6 +2934,7 @@ function setupInteractions() {
     }
 
     if (charGroup) {
+    updateDirtSpots();
       gsap.killTweensOf(charGroup.scale);
       gsap.to(charGroup.scale, {
         x: baseScale * 1.14, y: baseScale * 0.86, z: baseScale * 1.14,
@@ -3007,6 +3090,7 @@ function animate() {
   if (smoothedVolume < 0.005) smoothedVolume = 0;
 
   if (charGroup) {
+    updateDirtSpots();
     if (!petState.isSleeping) {
       // 1. Плавное процедурное дыхание тела и покачивание (Talking Tom style)
       const breathPulse = Math.sin(time * 2.0) * 0.007;
@@ -3457,6 +3541,7 @@ async function playVoiceAudioBlob(blob) {
   currentVoiceAudio = audio;
 
   if (charGroup) {
+    updateDirtSpots();
     gsap.to(charGroup.rotation, {
       z: 0.05, duration: 0.16, yoyo: true, repeat: 7, ease: 'sine.inOut',
       onComplete: () => { if (charGroup) charGroup.rotation.z = 0; }
@@ -3763,6 +3848,7 @@ function showGiftCelebration(gift) {
   modal.classList.add('flex');
 
   if (charGroup) {
+    updateDirtSpots();
     gsap.to(charGroup.rotation, { y: charGroup.rotation.y + Math.PI * 2, duration: 1.0, ease: 'power2.out' });
     triggerSquashAndStretch();
   }
