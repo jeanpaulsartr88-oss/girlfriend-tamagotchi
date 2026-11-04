@@ -1,6 +1,16 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
+  <!-- Принудительный сброс устаревшего кэша браузера -->
+  <script>
+    const APP_BUILD_VER = '20261104-v6-pristine';
+    if (localStorage.getItem('tamagotchi_build_ver') !== APP_BUILD_VER) {
+      localStorage.setItem('tamagotchi_build_ver', APP_BUILD_VER);
+      if ('caches' in window) {
+        caches.keys().then(names => names.forEach(n => caches.delete(n)));
+      }
+    }
+  </script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
@@ -1780,103 +1790,15 @@ function updateDirtSpots(hygienePercent = petState.hygiene) {
   });
 }
 
-function createPleatedSkirtMaterial() {
-  const canvas = document.createElement('canvas');
-  canvas.width = 512;
-  canvas.height = 256;
-  const ctx = canvas.getContext('2d');
-
-  const bumpCanvas = document.createElement('canvas');
-  bumpCanvas.width = 512;
-  bumpCanvas.height = 256;
-  const bCtx = bumpCanvas.getContext('2d');
-
-  // Базовый цвет графита (#374151)
-  ctx.fillStyle = '#374151';
-  ctx.fillRect(0, 0, 512, 256);
-
-  bCtx.fillStyle = '#808080';
-  bCtx.fillRect(0, 0, 512, 256);
-
-  const numPleats = 32;
-  const pleatWidth = 512 / numPleats;
-
-  for (let i = 0; i < numPleats; i++) {
-    const x = i * pleatWidth;
-
-    // Мягкий градиент: чередование приглушенного темно-серого (#2d3748) и базового графита (#374151)
-    const grad = ctx.createLinearGradient(x, 0, x + pleatWidth, 0);
-    grad.addColorStop(0.0, '#2d3748');
-    grad.addColorStop(0.4, '#2d3748');
-    grad.addColorStop(0.6, '#374151');
-    grad.addColorStop(1.0, '#374151');
-    ctx.fillStyle = grad;
-    ctx.fillRect(x, 0, pleatWidth, 256);
-
-    // Очень деликатный и мягкий bump
-    const bGrad = bCtx.createLinearGradient(x, 0, x + pleatWidth, 0);
-    bGrad.addColorStop(0.0, '#666666');
-    bGrad.addColorStop(0.4, '#666666');
-    bGrad.addColorStop(0.6, '#999999');
-    bGrad.addColorStop(1.0, '#999999');
-    bCtx.fillStyle = bGrad;
-    bCtx.fillRect(x, 0, pleatWidth, 256);
-  }
-
-  // Тонкий деликатный светлый кант на подоле текстуры
-  ctx.fillStyle = '#f8fafc';
-  ctx.fillRect(0, 256 - 8, 512, 6);
-
-  const tex = new THREE.CanvasTexture(canvas);
-  tex.wrapS = THREE.RepeatWrapping;
-  tex.wrapT = THREE.ClampToEdgeWrapping;
-
-  const bumpTex = new THREE.CanvasTexture(bumpCanvas);
-  bumpTex.wrapS = THREE.RepeatWrapping;
-  bumpTex.wrapT = THREE.ClampToEdgeWrapping;
-
-  return new THREE.MeshStandardMaterial({
-    map: tex,
-    bumpMap: bumpTex,
-    bumpScale: 0.008, // Мягкий рельеф без жестких граней
-    roughness: 0.95,  // Полностью матовая ткань без блеска
-    metalness: 0.0
-  });
-}
-
+// Оригинальная модель girl.glb содержит полную эталонную геометрию:
+// волосы, лицо, бомбер, юбку, ноги и обувь. Процедурные наложения юбки и ног отключены.
 function buildCharacterSkirt() {
-  const skirtGroup = new THREE.Group();
-  skirtGroup.name = 'characterLegs';
-
-  // 1. Анатомический А-силуэт: верх 0.112, низ 0.126, высота 0.135, 32 сегмента, Y 0.435
-  const skirtMat = createPleatedSkirtMaterial();
-  const skirtGeo = new THREE.CylinderGeometry(0.112, 0.126, 0.135, 32, 3, false);
-  const skirt = new THREE.Mesh(skirtGeo, skirtMat);
-  skirt.position.set(0, 0.435, 0);
-  skirt.castShadow = true;
-  skirt.receiveShadow = true;
-  skirtGroup.add(skirt);
-
-  // 2. Деликатный тонкий кант подола: толщина 0.0045, радиус 0.1263
-  const hemGeo = new THREE.CylinderGeometry(0.1262, 0.1265, 0.0045, 32, 1, true);
-  const hemMat = new THREE.MeshStandardMaterial({
-    color: 0xf8fafc,
-    roughness: 0.8,
-    metalness: 0.05
-  });
-  const hemTrim = new THREE.Mesh(hemGeo, hemMat);
-  hemTrim.position.set(0, 0.435 - 0.0675 + 0.0022, 0);
-  hemTrim.castShadow = true;
-  skirtGroup.add(hemTrim);
-
-  return skirtGroup;
+  return null;
 }
 
 function buildCharacterLegs() {
-  return buildCharacterSkirt();
+  return null;
 }
-
-// Процедурная деформация вершин полностью отключена для сохранения чистоты оригинальной сетки girl.glb
 
 // ─── ЗАГРУЗКА GIRL.GLB + СОХРАНЕНИЕ ОРИГИНАЛЬНЫХ МАТЕРИАЛОВ И АНИМАЦИИ ───────
 function loadCharacterModel() {
@@ -2024,9 +1946,8 @@ function loadCharacterModel() {
         }
       }
       console.log('--- SKELETON BONES FOUND IN GIRL.GLB ---', Object.keys(bones).filter(k => bones[k]));
-      characterLegs = buildCharacterSkirt();
-      charGroup.add(characterLegs);
-      window.characterLegs = characterLegs;
+      characterLegs = null;
+      window.characterLegs = null;
 
       dirtGroup = buildCharacterDirt();
       charGroup.add(dirtGroup);
